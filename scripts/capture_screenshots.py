@@ -285,7 +285,7 @@ def build_sample_data():
     return sessions, samples, inventory, recs, logs, errors
 
 
-def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, page_filter: list = None):
+def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, page_filter: list = None, is_demo_mode: bool = False):
     app = QApplication.instance() or QApplication(sys.argv)
     from PySide6.QtGui import QFontDatabase
     for f in ["segoeui.ttf", "segoeuib.ttf", "segoeuisb.ttf", "segoeuii.ttf"]:
@@ -307,7 +307,23 @@ def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, p
     config = load_config(paths.config_file)
     store = CsvStore(paths)
 
-    sessions, samples, inventory, recs, logs, errors = build_sample_data()
+    if is_demo_mode:
+        from desktop_intelligence.demo_data import seed_demo_data
+        from desktop_intelligence.analytics.clean import clean_sessions_df, clean_samples_df
+        seed_demo_data(store)
+        raw_sess = store.read_dataframe("activity_sessions", paths.activity_sessions_csv)
+        sessions = clean_sessions_df(raw_sess)
+        raw_samp = store.read_dataframe("resource_samples", paths.resource_samples_csv)
+        samples = clean_samples_df(raw_samp)
+        raw_inv = store.read_rows("application_inventory", paths.application_inventory_csv)
+        inventory = [InventoryItem.from_row(r) for r in raw_inv]
+        raw_recs = store.read_rows("recommendations", paths.recommendations_csv)
+        recs = [RecommendationRecord.from_row(r) for r in raw_recs]
+        raw_logs = store.read_rows("automation_log", paths.automation_log_csv)
+        logs = [AutomationLogRecord.from_row(r) for r in raw_logs]
+        errors = []
+    else:
+        sessions, samples, inventory, recs, logs, errors = build_sample_data()
 
     all_pages = [
         ("overview", 0),
@@ -326,7 +342,7 @@ def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, p
 
     for mode in modes:
         accent = "#8B5CF6" if mode == "dark" else "#6957E8"
-        window = MainWindow(config=config, paths=paths, store=store)
+        window = MainWindow(config=config, paths=paths, store=store, is_demo_mode=is_demo_mode)
         window.refresh_timer.stop()
         if hasattr(window, "worker"):
             try:
@@ -348,7 +364,8 @@ def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, p
 
             pixmap = window.grab()
             scale_suffix = f"_{scale}" if scale else ""
-            save_path = output_dir / f"{page_name}_{mode}{scale_suffix}.png"
+            demo_suffix = "_demo" if is_demo_mode else ""
+            save_path = output_dir / f"{page_name}_{mode}{scale_suffix}{demo_suffix}.png"
             pixmap.save(str(save_path), "PNG")
             print(f"Captured: {save_path} ({pixmap.width()}x{pixmap.height()})")
 
@@ -363,6 +380,7 @@ if __name__ == "__main__":
     parser.add_argument("--theme", type=str, default=None, choices=["dark", "light"], help="Theme to capture")
     parser.add_argument("--output-dir", type=Path, default=Path("screenshots"), help="Directory to save screenshots")
     parser.add_argument("--pages", nargs="*", default=None, help="Subset of page names to capture (e.g. overview usage)")
+    parser.add_argument("--demo-mode", action="store_true", help="Capture screenshots in Demo Mode")
     args = parser.parse_args()
 
-    capture_all(scale=args.scale, theme=args.theme, output_dir=args.output_dir, page_filter=args.pages)
+    capture_all(scale=args.scale, theme=args.theme, output_dir=args.output_dir, page_filter=args.pages, is_demo_mode=args.demo_mode)

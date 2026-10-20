@@ -174,7 +174,13 @@ class WindowsProcessStartListener(BaseEventSource):
                         self._stop_event.wait(1.0)
         finally:
             proc_event = None
-            watcher = None
+            if watcher is not None:
+                try:
+                    if hasattr(watcher, "wmi_event"):
+                        watcher.wmi_event = None
+                except Exception:
+                    pass
+                watcher = None
             wmi_client = None
             import gc
             gc.collect()

@@ -28,9 +28,9 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 9.1.1 | Chart High-DPI canvas fill ratio (1.00 at 125%, 150%, 200%) | PARTIAL | `desktop_intelligence/visualization/charts.py:277-318` (geometry needs Phase 1 A.1 refactoring) | `tests/unit/test_stage8_ui_correctness.py:test_themed_chart_canvas_geometry_and_dpi_synchronization` (needs Phase 1 ratio tests) |
-| 9.1.2 | Constrained layout for figures (no `tight_layout()`) | TODO | `desktop_intelligence/visualization/charts.py:137,273` (still has `fig.tight_layout()`) | Phase 1: `test_no_tight_layout_in_charts` |
-| 9.1.3 | Transparent chart surfaces matching cards | TODO | `desktop_intelligence/visualization/charts.py:286` (`background-color: transparent`, but patches have default opacity) | Phase 1: `test_canvas_fills_card` |
+| 9.1.1 | Chart High-DPI canvas fill ratio (1.00 at 125%, 150%, 200%) | DONE | `desktop_intelligence/visualization/charts.py:320-360` (`set_dpi(100.0 * dpr)`) | `tests/unit/test_v4_chart_geometry.py:test_canvas_fill_ratio_across_device_pixel_ratios` |
+| 9.1.2 | Constrained layout for figures (no `tight_layout()`) | DONE | `desktop_intelligence/visualization/charts.py:27-140` (`layout="constrained"`, 0 `tight_layout()` calls) | `tests/unit/test_v4_chart_geometry.py:test_zero_tight_layout_calls_in_charts` |
+| 9.1.3 | Transparent chart surfaces matching cards | DONE | `desktop_intelligence/visualization/charts.py:345-350` (`patch.set_alpha(0.0)`, `ax.patch.set_alpha(0.0)`) | `tests/unit/test_v4_chart_geometry.py:test_chart_patches_fully_transparent` |
 | 9.2 | Durations as hours and minutes (no decimal hours) | DONE | `desktop_intelligence/formatting.py`, `ui/pages/overview.py:281`, `ui/pages/usage.py:121`, `charts.py` | `tests/unit/test_v4_formatting.py:test_format_duration_cases, test_usage_table_duration_item_sorting, test_no_decimal_hours_in_ui` |
 | 9.3 | Reliability events parsed from real Event Log XML | DONE | `desktop_intelligence/collectors/system_errors.py:200-300` (`EvtQuery` + `EvtRender` XML parsing with `xml.etree`) | `tests/unit/test_stage4_reliability_events.py:test_parse_event_xml_*` |
 | 9.4 | Single-flight DataLoaderWorker and Qt thread cleanup | DONE | `desktop_intelligence/ui/main_window.py:334-350` (`_active_worker`, `_refresh_pending`, `deleteLater`) | `tests/unit/test_stage8_ui_correctness.py:test_main_window_single_flight_worker` |
