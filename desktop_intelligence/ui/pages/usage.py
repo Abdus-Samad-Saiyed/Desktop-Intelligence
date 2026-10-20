@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -52,6 +53,7 @@ class UsagePage(QWidget):
         trend_box.setContentsMargins(12, 12, 12, 12)
         trend_box.setSpacing(6)
         self.trend_canvas = ThemedChartCanvas(create_empty_figure())
+        self.trend_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.trend_canvas.setMinimumHeight(230)
         trend_box.addWidget(self.trend_canvas)
         charts_layout.addWidget(trend_card, stretch=1)
@@ -63,11 +65,12 @@ class UsagePage(QWidget):
         dow_box.setContentsMargins(12, 12, 12, 12)
         dow_box.setSpacing(6)
         self.dow_canvas = ThemedChartCanvas(create_empty_figure())
+        self.dow_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.dow_canvas.setMinimumHeight(230)
         dow_box.addWidget(self.dow_canvas)
         charts_layout.addWidget(dow_card, stretch=1)
 
-        layout.addLayout(charts_layout)
+        layout.addLayout(charts_layout, stretch=2)
 
         # Table Section
         table_title = QLabel("Application Usage Breakdown")
@@ -85,7 +88,7 @@ class UsagePage(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
-        layout.addWidget(self.table, stretch=1)
+        layout.addWidget(self.table, stretch=3)
 
     def update_data(
         self,

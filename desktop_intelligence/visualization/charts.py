@@ -10,9 +10,12 @@ import pandas as pd
 # Use non-interactive backend for embedded generation
 matplotlib.use("Agg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from desktop_intelligence.ui.theme import get_effective_theme
+
+BASE_DPI = 100.0
 
 
 def get_chart_theme_colors(theme_mode: str = "light", accent_color: Optional[str] = None) -> Dict[str, str]:
@@ -57,13 +60,12 @@ def create_empty_figure(
 ) -> Figure:
     """Return an empty figure with a user-friendly notice and proper theme colors."""
     colors = get_chart_theme_colors(theme_mode, accent_color)
-    fig = Figure(figsize=(6, 3), dpi=100, facecolor=colors["fig_bg"])
+    fig = Figure(figsize=(6, 3), dpi=BASE_DPI, facecolor=colors["fig_bg"], layout="constrained")
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
     ax.text(0.5, 0.5, message, ha="center", va="center", color=colors["secondary_text"], fontsize=10)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.spines[:].set_visible(False)
-    fig.tight_layout()
     return fig
 
 
@@ -93,7 +95,7 @@ def create_top_apps_chart(
     if not apps:
         return create_empty_figure("No application usage recorded.", theme_mode, accent_color)
 
-    fig = Figure(figsize=(6, 3.2), dpi=100, facecolor=colors["fig_bg"])
+    fig = Figure(figsize=(6, 3.2), dpi=BASE_DPI, facecolor=colors["fig_bg"], layout="constrained")
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
 
     y_pos = np.arange(len(apps))
@@ -134,7 +136,6 @@ def create_top_apps_chart(
             color=colors["secondary_text"],
         )
 
-    fig.tight_layout()
     return fig
 
 
@@ -157,7 +158,7 @@ def create_daily_trend_chart(
     active = pd.to_numeric(clean_df.get("active_hours", 0.0), errors="coerce").fillna(0.0).tolist()
     idle = pd.to_numeric(clean_df.get("idle_hours", 0.0), errors="coerce").fillna(0.0).tolist()
 
-    fig = Figure(figsize=(6, 3.2), dpi=100, facecolor=colors["fig_bg"])
+    fig = Figure(figsize=(6, 3.2), dpi=BASE_DPI, facecolor=colors["fig_bg"], layout="constrained")
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
 
     x = np.arange(len(dates))
@@ -187,7 +188,6 @@ def create_daily_trend_chart(
     else:
         ax.set_ylim(0, max_val * 1.2)
 
-    fig.tight_layout()
     return fig
 
 
@@ -205,7 +205,7 @@ def create_day_of_week_chart(
     days = [str(d)[:3] for d in dow_df["day_of_week"].tolist()]
     hours = pd.to_numeric(dow_df.get("active_hours", 0.0), errors="coerce").fillna(0.0).tolist()
 
-    fig = Figure(figsize=(5, 3), dpi=100, facecolor=colors["fig_bg"])
+    fig = Figure(figsize=(5, 3), dpi=BASE_DPI, facecolor=colors["fig_bg"], layout="constrained")
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
 
     x = np.arange(len(days))
@@ -229,7 +229,6 @@ def create_day_of_week_chart(
     else:
         ax.set_ylim(0, max_h * 1.15)
 
-    fig.tight_layout()
     return fig
 
 
@@ -250,7 +249,7 @@ def create_hourly_heatmap_chart(
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     hours = [f"{h:02d}" for h in range(24)]
 
-    fig = Figure(figsize=(7, 2.8), dpi=100, facecolor=colors["fig_bg"])
+    fig = Figure(figsize=(7, 2.8), dpi=BASE_DPI, facecolor=colors["fig_bg"], layout="constrained")
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
 
     im = ax.imshow(clean_mat, cmap=colors["cmap"], aspect="auto", interpolation="nearest")
@@ -270,55 +269,55 @@ def create_hourly_heatmap_chart(
     ax.tick_params(colors=colors["secondary_text"], which="both")
     ax.spines[:].set_color(colors["border"])
 
-    fig.tight_layout()
     return fig
 
 
 class ThemedChartCanvas(FigureCanvasQTAgg):
-    """PySide6 FigureCanvas that properly synchronizes figure geometry to avoid white borders and compressed graphics."""
+    """Matplotlib canvas that fills its widget at any Windows display scale."""
 
     def __init__(self, fig: Optional[Figure] = None, parent: Optional[QWidget] = None):
-        if fig is None:
-            fig = create_empty_figure()
-        super().__init__(fig)
-        self.figure = fig
-        fig.set_canvas(self)
-        self.setStyleSheet("background-color: transparent;")
+        super().__init__(fig if fig is not None else create_empty_figure())
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._applied_dpr = None
+        # Matplotlib sets WA_OpaquePaintEvent; unless it is turned off the canvas paints white.
+        self.setAttribute(Qt.WA_OpaquePaintEvent, False)
+        self.setAutoFillBackground(False)
+        self.setStyleSheet("background: transparent;")
+        self._style_surface(self.figure)
+        self._sync_dimensions()
+
+    @staticmethod
+    def _style_surface(fig: Figure) -> None:
+        fig.patch.set_alpha(0.0)
+        for ax in fig.axes:
+            ax.patch.set_alpha(0.0)
 
     def _sync_dimensions(self) -> None:
-        if self.figure is None:
+        fig = self.figure
+        if fig is None:
             return
-        w = max(self.width(), 100)
-        h = max(self.height(), 100)
-        dpi = float(getattr(self.figure, "dpi", 100.0) or 100.0)
-        self.figure.set_size_inches(w / dpi, h / dpi, forward=False)
-        try:
-            self.figure.tight_layout()
-        except Exception:
-            pass
+        dpr = float(self.device_pixel_ratio)
+        fig.set_dpi(BASE_DPI * dpr)  # physical pixels per inch
+        fig.set_size_inches(max(self.width(), 1) / BASE_DPI, max(self.height(), 1) / BASE_DPI, forward=False)
+        self._applied_dpr = dpr
 
     def update_chart_figure(self, fig: Figure) -> None:
-        """Update canvas with a new figure, ensuring canvas binding and geometry synchronization."""
+        old = self.figure
         self.figure = fig
         fig.set_canvas(self)
+        self._style_surface(fig)
         self._sync_dimensions()
         self.draw()
+        if old is not None and old is not fig:
+            old.clear()  # release artists promptly
 
     update_figure = update_chart_figure
 
-    def resizeEvent(self, event) -> None:
-        """Ensure figure size tracks widget size during window resizes."""
-        super().resizeEvent(event)
-        if self.figure is not None and event is not None:
-            w = event.size().width()
-            h = event.size().height()
-            if w > 20 and h > 20:
-                dpi = float(getattr(self.figure, "dpi", 100.0) or 100.0)
-                self.figure.set_size_inches(w / dpi, h / dpi, forward=False)
-                try:
-                    self.figure.tight_layout()
-                except Exception:
-                    pass
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._applied_dpr != self.device_pixel_ratio:
+            self._sync_dimensions()
             self.draw_idle()
+
+    # No resizeEvent override: FigureCanvasQT.resizeEvent already multiplies by device_pixel_ratio.
 

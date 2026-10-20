@@ -194,10 +194,10 @@ class OverviewPage(QWidget):
         chart_card_layout.setSpacing(6)
 
         self.chart_canvas = ThemedChartCanvas(create_empty_figure())
-        self.chart_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.chart_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.chart_canvas.setMinimumHeight(240)
         chart_card_layout.addWidget(self.chart_canvas)
-        main_layout.addWidget(chart_card)
+        main_layout.addWidget(chart_card, stretch=3)
 
         # Bottom section: Recommendations
         rec_header = QLabel("Smart Recommendations & Habits")
@@ -214,7 +214,7 @@ class OverviewPage(QWidget):
         self.rec_layout.setContentsMargins(0, 0, 0, 0)
         self.rec_layout.setSpacing(6)
         self.rec_scroll.setWidget(self.rec_container)
-        main_layout.addWidget(self.rec_scroll, stretch=1)
+        main_layout.addWidget(self.rec_scroll, stretch=2)
 
         # Persistent empty-state message (never deleted across refreshes)
         self.empty_rec_label = QLabel("No pending recommendations. System is observing normal usage patterns.")
