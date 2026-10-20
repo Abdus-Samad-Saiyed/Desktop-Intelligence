@@ -1,0 +1,59 @@
+# Desktop Intelligence - Configuration File
+
+[general]
+app_name = "Desktop Intelligence"
+config_version = 1
+log_level = "INFO"
+timezone = "local"
+
+[paths]
+data_dir = ""
+log_dir = ""
+
+[collection]
+enable_process_start_events = true
+enable_foreground_events = true
+enable_application_inventory = true
+enable_system_error_events = true
+idle_timeout_seconds = 300
+idle_check_interval_seconds = 60
+resource_snapshot_on_process_start = true
+resource_snapshot_on_foreground_change = true
+collect_window_titles = false
+
+[retention]
+events_days = 180
+sessions_days = 365
+resource_samples_days = 90
+
+[patterns]
+minimum_observation_days = 14
+minimum_context_occurrences = 10
+launch_frequency_threshold = 0.80
+time_bucket_minutes = 60
+eligible_day_types = ['weekday', 'weekend']
+
+[resources]
+high_memory_percent = 15.0
+high_system_memory_percent = 85.0
+high_cpu_percent = 80.0
+sustained_observation_count = 3
+
+[automation]
+enabled = false
+require_rule_approval = true
+prompt_timeout_seconds = 10
+no_response_action = "skip"
+prevent_duplicate_instances = true
+launch_missed_window_seconds = 0
+
+[ui]
+theme = "light"
+accent_color = "#635BFF"
+start_minimized = false
+show_tray_icon = true
+
+[llm]
+enabled = false
+provider = "none"
+share_raw_events = false

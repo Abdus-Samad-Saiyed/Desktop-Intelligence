@@ -1,0 +1,25 @@
+# Virtual environments
+myenv/
+.venv/
+env/
+venv/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Desktop Intelligence runtime data and logs
+data/
+logs/
+*.csv
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Testing and coverage
+.coverage
+htmlcov/
