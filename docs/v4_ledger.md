@@ -13,7 +13,7 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 1.1.A | WMI access denied handled gracefully with fallback | PARTIAL | `desktop_intelligence/collectors/windows_process_events.py:75-105` (fallback works, but status explanation & mode need Phase 3 enhancement) | `tests/unit/test_stage1_wmi_resilience.py:test_wmi_listener_fallback_to_standard_query_on_trace_access_denied` |
+| 1.1.A | WMI access denied handled gracefully with fallback and diagnostics | DONE | `desktop_intelligence/collectors/windows_process_events.py`, `collectors/wmi_errors.py`, `ui/health_summary.py`, `ui/pages/overview.py` (Why button), `ui/pages/health.py` | `tests/unit/test_stage1_wmi_resilience.py`, `tests/unit/test_v4_collector_status.py`, `tests/live/test_live_collector_pipeline.py` |
 | 1.1.B | Overview dashboard repeated refresh C++ object deletion crash | DONE | `desktop_intelligence/ui/pages/overview.py:226-244` (`_clear_recommendations` preserves static labels, deletes only dynamic widgets) | `tests/unit/test_stage2_overview_lifecycle.py:test_overview_page_repeated_refreshes_across_all_transitions` |
 | 1.1.C | Matplotlib singular transformation warning | DONE | `desktop_intelligence/visualization/charts.py:112` (`upper_limit = max(1.0, max_usage * 1.15)`) | `tests/unit/test_stage6_inventory_and_analytics.py:test_matplotlib_zero_usage_no_singular_transformation_warning` |
 | 1.2.1 | `setup.py` bootstrapper SHA-256 byte-for-byte preserved | DONE | `setup.py:1` (Hash: `35320E317761EF4507DBA4566D7E654F6C1680E6040BDD1CCF36B2D1FA32664D`) | `tests/test_invariants.py:test_setup_py_hash_preserved` |

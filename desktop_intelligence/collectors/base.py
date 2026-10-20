@@ -129,6 +129,12 @@ class CollectorHealth:
     since_utc: Optional[str] = None
     last_event_ts_utc: Optional[str] = None
     event_count: int = 0
+    mode: Optional[str] = None
+    severity: str = "ok"  # "ok" | "warning" | "error"
+    reason_code: Optional[str] = None
+    reason: Optional[str] = None
+    impact: Optional[str] = None
+    remediation: Optional[str] = None
 
 
 class BaseEventSource(ABC):
@@ -143,6 +149,12 @@ class BaseEventSource(ABC):
         self._start_time_utc: Optional[str] = None
         self._last_event_ts_utc: Optional[str] = None
         self._event_count: int = 0
+        self.health_mode: Optional[str] = None
+        self.health_severity: str = "ok"
+        self.health_reason_code: Optional[str] = None
+        self.health_reason: Optional[str] = None
+        self.health_impact: Optional[str] = None
+        self.health_remediation: Optional[str] = None
 
     @abstractmethod
     def start(self) -> None:
@@ -167,5 +179,11 @@ class BaseEventSource(ABC):
             since_utc=self._start_time_utc,
             last_event_ts_utc=self._last_event_ts_utc,
             event_count=self._event_count,
+            mode=self.health_mode,
+            severity=self.health_severity,
+            reason_code=self.health_reason_code,
+            reason=self.health_reason,
+            impact=self.health_impact,
+            remediation=self.health_remediation,
         )
 

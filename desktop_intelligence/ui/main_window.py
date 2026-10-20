@@ -42,6 +42,7 @@ from desktop_intelligence.ui.pages.health import HealthPage
 from desktop_intelligence.ui.pages.applications import ApplicationsPage
 from desktop_intelligence.ui.pages.automation import AutomationPage
 from desktop_intelligence.ui.pages.settings import SettingsPage
+from desktop_intelligence.ui.health_summary import summarise_health
 from desktop_intelligence.ui.theme import generate_stylesheet, get_effective_theme
 
 
@@ -225,7 +226,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.stack, stretch=1)
 
         # Instantiate pages
-        self.page_overview = OverviewPage(on_rec_action=self._handle_recommendation_action)
+        self.page_overview = OverviewPage(
+            on_rec_action=self._handle_recommendation_action,
+            on_navigate_health=lambda: self.nav_list.setCurrentRow(2),
+        )
         self.page_usage = UsagePage()
         self.page_health = HealthPage()
         self.page_apps = ApplicationsPage()
@@ -362,6 +366,10 @@ class MainWindow(QMainWindow):
             except Exception:
                 health_dict = {}
 
+            summary = summarise_health(health_dict)
+            self._current_health_summary = summary
+            collection_status = summary.overall_status
+
             if "foreground" in health_dict:
                 h = health_dict["foreground"]
                 st = getattr(h, "state", "stopped")
@@ -404,16 +412,6 @@ class MainWindow(QMainWindow):
                     self.status_process.setStyleSheet("color: #64748B; font-size: 11px;")
                 self.status_process.setToolTip(f"Process Trace: {msg}")
 
-            states = [getattr(h, "state", "stopped") for h in health_dict.values()]
-            if "failed" in states or "unavailable" in states:
-                collection_status = "Failed" if "failed" in states else "Unavailable"
-            elif "degraded" in states:
-                collection_status = "Degraded (Polling)"
-            elif all(s == "active" for s in states if s != "disabled"):
-                collection_status = "Operational (Active)"
-            elif any(s == "stopped" for s in states):
-                collection_status = "Stopped"
-
         return collection_status
 
     def _on_data_loaded(
@@ -453,7 +451,13 @@ class MainWindow(QMainWindow):
         )
 
         # Update Health
-        self.page_health.update_data(samples_df, errors, diag, self.config.resources)
+        self.page_health.update_data(
+            samples_df,
+            errors,
+            diag,
+            self.config.resources,
+            health_summary=getattr(self, "_current_health_summary", None),
+        )
 
         # Update Applications
         self.page_apps.update_data(inventory_items)

@@ -9,6 +9,7 @@ from typing import Callable, Optional
 
 from desktop_intelligence.collectors.base import BaseEventSource, Clock, SystemClock, RawEvent
 from desktop_intelligence.collectors.foreground_events import get_process_info_from_pid
+from desktop_intelligence.collectors.wmi_errors import classify_wmi_error
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,15 @@ class WindowsProcessStartListener(BaseEventSource):
         try:
             import pythoncom
             import wmi
-        except ImportError:
+        except ImportError as err:
             self.health_state = "unavailable"
             self.status_message = "Failed: wmi or pythoncom module not installed"
+            self.health_mode = "disabled"
+            self.health_severity = "error"
+            self.health_reason_code = "COM_UNAVAILABLE"
+            self.health_reason = str(err)
+            self.health_impact = "Process launch detection is unavailable."
+            self.health_remediation = "Install pywin32 and WMI packages."
             logger.warning("%s; process-start listener disabled", self.status_message)
             self._running = False
             return
@@ -59,6 +66,7 @@ class WindowsProcessStartListener(BaseEventSource):
         pythoncom.CoInitialize()
         watcher = None
         wmi_client = None
+        proc_event = None
         is_trace = False
 
         try:
@@ -67,6 +75,12 @@ class WindowsProcessStartListener(BaseEventSource):
             except Exception as exc:
                 self.health_state = "unavailable"
                 self.status_message = f"Failed: WMI connection failed ({exc})"
+                self.health_mode = "disabled"
+                self.health_severity = "error"
+                self.health_reason_code = "WMI_CONNECT_FAILED"
+                self.health_reason = str(exc)
+                self.health_impact = "WMI process collector cannot connect."
+                self.health_remediation = "Verify Windows Management Instrumentation service is running."
                 logger.warning("WMI client initialization failed: %s", exc)
                 self._running = False
                 return
@@ -77,8 +91,21 @@ class WindowsProcessStartListener(BaseEventSource):
                 is_trace = True
                 self.health_state = "active"
                 self.status_message = "Active (Kernel Process Trace)"
+                self.health_mode = "trace"
+                self.health_severity = "ok"
+                self.health_reason_code = "NONE"
+                self.health_reason = "Kernel process start trace active."
+                self.health_impact = "Real-time process launch capture."
+                self.health_remediation = None
                 logger.info("Process-start listener initialized: %s", self.status_message)
             except (wmi.x_access_denied, Exception) as exc:
+                classified = classify_wmi_error(exc)
+                self.health_mode = "polling"
+                self.health_severity = classified["severity"]
+                self.health_reason_code = classified["reason_code"]
+                self.health_reason = classified["reason"]
+                self.health_impact = classified["impact"]
+                self.health_remediation = classified["remediation"]
                 logger.info(
                     "Win32_ProcessStartTrace subscription unavailable (%s); attempting standard WMI process watcher...",
                     exc,
@@ -97,8 +124,15 @@ class WindowsProcessStartListener(BaseEventSource):
                     self.status_message = "Degraded (polling-based; sub-second processes may be missed)"
                     logger.info("Process-start listener initialized: %s", self.status_message)
                 except Exception as exc:
+                    classified = classify_wmi_error(exc)
                     self.health_state = "unavailable"
                     self.status_message = f"Failed: WMI process subscription restricted ({exc})"
+                    self.health_mode = "disabled"
+                    self.health_severity = "error"
+                    self.health_reason_code = classified["reason_code"]
+                    self.health_reason = classified["reason"]
+                    self.health_impact = "Process launch detection disabled."
+                    self.health_remediation = classified["remediation"]
                     logger.warning("WMI process creation watcher could not be started: %s", exc)
                     self._running = False
                     return
@@ -139,7 +173,7 @@ class WindowsProcessStartListener(BaseEventSource):
                         logger.warning("WMI watch iteration error: %s", loop_exc)
                         self._stop_event.wait(1.0)
         finally:
-            # Clean COM release to prevent "Win32 exception occurred releasing IUnknown"
+            proc_event = None
             watcher = None
             wmi_client = None
             import gc

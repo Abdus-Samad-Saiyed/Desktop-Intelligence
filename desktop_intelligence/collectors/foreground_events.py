@@ -121,6 +121,11 @@ class WindowsForegroundHook(BaseEventSource):
             if sys.platform != "win32":
                 self.health_state = "failed"
                 self.status_message = "Unsupported on non-Windows OS"
+                self.health_mode = "disabled"
+                self.health_severity = "error"
+                self.health_reason_code = "PLATFORM_UNSUPPORTED"
+                self.health_reason = "SetWinEventHook is only available on Windows."
+                self.health_impact = "Foreground window tracking unavailable."
             return
 
         self._running = True
@@ -181,12 +186,24 @@ class WindowsForegroundHook(BaseEventSource):
         if not self._hook:
             self.health_state = "failed"
             self.status_message = "Failed: SetWinEventHook rejected"
+            self.health_mode = "disabled"
+            self.health_severity = "error"
+            self.health_reason_code = "SET_WIN_EVENT_HOOK_FAILED"
+            self.health_reason = "Windows rejected SetWinEventHook registration."
+            self.health_impact = "Foreground application tracking is unavailable."
+            self.health_remediation = "Ensure the process is running on an interactive Windows desktop session."
             logger.error("Failed to install SetWinEventHook for foreground window")
             self._running = False
             return
 
         self.health_state = "active"
         self.status_message = "Active (Windows WinEvent Hook)"
+        self.health_mode = "winevent"
+        self.health_severity = "ok"
+        self.health_reason_code = "NONE"
+        self.health_reason = "WinEvent hook installed successfully."
+        self.health_impact = "Real-time foreground window change tracking."
+        self.health_remediation = None
 
         try:
             msg = wintypes.MSG()

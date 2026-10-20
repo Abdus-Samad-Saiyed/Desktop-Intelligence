@@ -154,9 +154,15 @@ class RecommendationWidget(QFrame):
 class OverviewPage(QWidget):
     """Main overview dashboard page."""
 
-    def __init__(self, on_rec_action: Optional[Callable[[str, str], None]] = None, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        on_rec_action: Optional[Callable[[str, str], None]] = None,
+        on_navigate_health: Optional[Callable[[], None]] = None,
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self.on_rec_action = on_rec_action
+        self.on_navigate_health = on_navigate_health
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
@@ -168,9 +174,22 @@ class OverviewPage(QWidget):
         title.setObjectName("page_title")
         self.status_label = QLabel("Collection Status: Initializing")
         self.status_label.setStyleSheet("color: #64748B; font-weight: 600; font-size: 12px;")
+
+        self.why_btn = QPushButton("Why?")
+        self.why_btn.setObjectName("link_btn")
+        self.why_btn.setCursor(Qt.PointingHandCursor)
+        self.why_btn.setStyleSheet(
+            "QPushButton { font-size: 11px; padding: 2px 8px; border-radius: 4px; "
+            "border: 1px solid #FBBF24; color: #FBBF24; background: rgba(251, 191, 36, 0.1); font-weight: 600; }"
+            "QPushButton:hover { background: rgba(251, 191, 36, 0.2); }"
+        )
+        self.why_btn.hide()
+        self.why_btn.clicked.connect(self._on_why_clicked)
+
         top_bar.addWidget(title)
         top_bar.addStretch()
         top_bar.addWidget(self.status_label)
+        top_bar.addWidget(self.why_btn)
         main_layout.addLayout(top_bar)
 
         # 4 Metric Cards
@@ -243,6 +262,10 @@ class OverviewPage(QWidget):
                 # Remove spacer items
                 self.rec_layout.removeItem(item)
 
+    def _on_why_clicked(self) -> None:
+        if self.on_navigate_health:
+            self.on_navigate_health()
+
     def update_data(
         self,
         sessions_df: pd.DataFrame,
@@ -256,12 +279,26 @@ class OverviewPage(QWidget):
         self.status_label.setText(f"Collection Status: {collection_status_text}")
         if "Degraded" in collection_status_text:
             self.status_label.setStyleSheet("color: #FBBF24; font-weight: 600; font-size: 12px;")
+            self.why_btn.setStyleSheet(
+                "QPushButton { font-size: 11px; padding: 2px 8px; border-radius: 4px; "
+                "border: 1px solid #FBBF24; color: #FBBF24; background: rgba(251, 191, 36, 0.1); font-weight: 600; }"
+                "QPushButton:hover { background: rgba(251, 191, 36, 0.2); }"
+            )
+            self.why_btn.show()
         elif any(k in collection_status_text for k in ["Failed", "Warning", "Unavailable", "Error"]):
             self.status_label.setStyleSheet("color: #FB7185; font-weight: 600; font-size: 12px;")
+            self.why_btn.setStyleSheet(
+                "QPushButton { font-size: 11px; padding: 2px 8px; border-radius: 4px; "
+                "border: 1px solid #FB7185; color: #FB7185; background: rgba(251, 113, 133, 0.1); font-weight: 600; }"
+                "QPushButton:hover { background: rgba(251, 113, 133, 0.2); }"
+            )
+            self.why_btn.show()
         elif "Stopped" in collection_status_text:
             self.status_label.setStyleSheet("color: #94A3B8; font-weight: 600; font-size: 12px;")
+            self.why_btn.hide()
         else:
             self.status_label.setStyleSheet("color: #34D399; font-weight: 600; font-size: 12px;")
+            self.why_btn.hide()
 
         self.card_freshness.set_value(freshness_text)
 

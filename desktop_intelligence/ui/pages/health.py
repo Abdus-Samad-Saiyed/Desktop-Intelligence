@@ -35,6 +35,30 @@ class HealthPage(QWidget):
         title.setObjectName("page_title")
         layout.addWidget(title)
 
+        # Collector Health & Service Diagnostics Section
+        col_header_layout = QHBoxLayout()
+        col_title = QLabel("Background Event Collectors & Operating Mode")
+        col_title.setObjectName("section_title")
+        self.collector_summary_lbl = QLabel("Operational")
+        self.collector_summary_lbl.setObjectName("caption")
+        col_header_layout.addWidget(col_title)
+        col_header_layout.addStretch()
+        col_header_layout.addWidget(self.collector_summary_lbl)
+        layout.addLayout(col_header_layout)
+
+        self.collector_table = QTableWidget()
+        self.collector_table.setColumnCount(6)
+        self.collector_table.setHorizontalHeaderLabels([
+            "Collector", "Status", "Mode", "Events", "Reason & Impact", "Remediation"
+        ])
+        self.collector_table.verticalHeader().setVisible(False)
+        col_hdr = self.collector_table.horizontalHeader()
+        col_hdr.setSectionResizeMode(QHeaderView.ResizeToContents)
+        col_hdr.setSectionResizeMode(4, QHeaderView.Stretch)
+        self.collector_table.setAlternatingRowColors(True)
+        self.collector_table.setMaximumHeight(140)
+        layout.addWidget(self.collector_table)
+
         # Resource Hog Section
         hog_title = QLabel("Memory Consumption & Resource Alerts")
         hog_title.setObjectName("section_title")
@@ -81,9 +105,44 @@ class HealthPage(QWidget):
         errors: List[SystemErrorEvent],
         diagnostic_status: str = "Operational",
         config: Optional[ResourcesConfig] = None,
+        health_summary: Optional[object] = None,
     ) -> None:
         """Update resource consumption and error event tables."""
         self.diag_status.setText(f"Diagnostics: {diagnostic_status}")
+
+        # Update collector health table
+        if health_summary is not None and hasattr(health_summary, "collectors"):
+            cols = health_summary.collectors
+            self.collector_summary_lbl.setText(f"Status: {health_summary.overall_status}")
+            self.collector_table.setRowCount(len(cols))
+            for r_idx, c in enumerate(cols):
+                self.collector_table.setItem(r_idx, 0, QTableWidgetItem(c.name))
+                st_item = QTableWidgetItem(c.state.capitalize())
+                if c.state == "active":
+                    st_item.setForeground(QColor("#34D399"))
+                elif c.state == "degraded":
+                    st_item.setForeground(QColor("#FBBF24"))
+                elif c.state in ("failed", "unavailable"):
+                    st_item.setForeground(QColor("#FB7185"))
+                else:
+                    st_item.setForeground(QColor("#94A3B8"))
+                self.collector_table.setItem(r_idx, 1, st_item)
+
+                mode_text = (getattr(c, "mode", None) or "-").upper()
+                self.collector_table.setItem(r_idx, 2, QTableWidgetItem(mode_text))
+                self.collector_table.setItem(r_idx, 3, QTableWidgetItem(str(getattr(c, "event_count", 0))))
+
+                reason = getattr(c, "reason", None)
+                impact = getattr(c, "impact", None)
+                msg = getattr(c, "message", "")
+                reason_impact = f"{reason} | {impact}" if (reason and impact) else (reason or msg)
+                self.collector_table.setItem(r_idx, 4, QTableWidgetItem(reason_impact or "-"))
+
+                remediation = getattr(c, "remediation", None)
+                remed_item = QTableWidgetItem(remediation or "None required")
+                if remediation:
+                    remed_item.setForeground(QColor("#FBBF24"))
+                self.collector_table.setItem(r_idx, 5, remed_item)
 
         # Update resource hogs table
         findings = analyze_resource_hogs(samples_df, config)
