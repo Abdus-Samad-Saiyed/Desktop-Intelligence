@@ -198,6 +198,104 @@ def query_recent_application_errors(
     return events, status
 
 
+def parse_event_xml(xml_str: str) -> Optional[SystemErrorEvent]:
+    """Parse real Windows Event Log XML (EvtRenderEventXml) for Event ID 1000/1001/1002."""
+    if not xml_str or not xml_str.strip():
+        return None
+
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml_str)
+    except Exception as exc:
+        logger.debug("Failed to parse Event XML: %s", exc)
+        return None
+
+    ns = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
+
+    sys_el = root.find("e:System", ns)
+    if sys_el is None:
+        sys_el = root.find("System")
+        ns = {}
+
+    provider_el = sys_el.find("e:Provider", ns) if sys_el is not None else None
+    provider_name = provider_el.attrib.get("Name", "") if provider_el is not None else ""
+
+    eid_text = sys_el.findtext("e:EventID", default="", namespaces=ns) if sys_el is not None else ""
+    try:
+        event_id = int(eid_text)
+    except ValueError:
+        event_id = 1000
+
+    time_el = sys_el.find("e:TimeCreated", ns) if sys_el is not None else None
+    sys_time = time_el.attrib.get("SystemTime", "") if time_el is not None else ""
+    event_ts_utc = sys_time if sys_time else format_utc_iso(datetime.now(timezone.utc))
+
+    data_dict: Dict[str, str] = {}
+    data_list: List[str] = []
+    data_query = "e:EventData/e:Data" if ns else "EventData/Data"
+    for d_el in root.findall(data_query, ns):
+        d_name = d_el.attrib.get("Name")
+        d_val = (d_el.text or "").strip()
+        if d_name:
+            data_dict[d_name.lower()] = d_val
+        data_list.append(d_val)
+
+    app_name = "unknown"
+    faulting_module = "-"
+    error_code = "-"
+    severity = "Report"
+    description = ""
+
+    if event_id == 1000 or "application error" in provider_name.lower():
+        severity = "Crash"
+        app_name = data_dict.get("appname") or (data_list[0] if len(data_list) > 0 else "unknown")
+        faulting_module = data_dict.get("faultmodulename") or (data_list[3] if len(data_list) > 3 else "-")
+        raw_code = data_dict.get("exceptioncode") or (data_list[6] if len(data_list) > 6 else "-")
+        if raw_code and not raw_code.lower().startswith("0x") and raw_code != "-":
+            error_code = f"0x{raw_code.upper()}"
+        else:
+            error_code = raw_code
+        description = f"Application crash in {app_name} (faulting module: {faulting_module}, code: {error_code})"
+
+    elif event_id == 1002 or "application hang" in provider_name.lower():
+        severity = "Hang"
+        app_name = data_dict.get("appname") or data_dict.get("program") or (data_list[0] if len(data_list) > 0 else "unknown")
+        faulting_module = "-"
+        error_code = data_dict.get("hangtype") or "-"
+        description = f"Application hang in {app_name} (stopped interacting with Windows)"
+
+    elif event_id == 1001 or "windows error reporting" in provider_name.lower():
+        severity = "Report"
+        event_name = data_dict.get("eventname", "WER")
+        p1 = data_dict.get("p1") or (data_list[0] if len(data_list) > 0 else "System / OS Report")
+        p4 = data_dict.get("p4") or (data_list[3] if len(data_list) > 3 else "-")
+        p7 = data_dict.get("p7") or (data_list[6] if len(data_list) > 6 else "-")
+
+        app_name = p1
+        faulting_module = p4 if p4.lower() not in {"not available", "unknown"} else "-"
+        if p7 and not p7.lower().startswith("0x") and p7 != "-":
+            error_code = f"0x{p7.upper()}"
+        else:
+            error_code = p7
+        description = f"Windows error report for {app_name} (event: {event_name})"
+    else:
+        severity = "Error"
+        app_name = data_dict.get("appname") or (data_list[0] if data_list else "unknown")
+        description = f"Event {event_id} from {provider_name}"
+
+    return SystemErrorEvent(
+        event_ts_utc=event_ts_utc,
+        app_name=app_name,
+        error_code=error_code or "-",
+        faulting_module=faulting_module or "-",
+        description=description,
+        source="Windows_Event_Log_XML",
+        severity=severity,
+        provider=provider_name or "Windows Event Log",
+        event_id=event_id,
+    )
+
+
 def _fetch_recent_application_errors(
     max_records: int = 50,
     clock: Optional[Clock] = None,
@@ -208,7 +306,27 @@ def _fetch_recent_application_errors(
     if sys.platform != "win32":
         return [], "System event monitoring is only supported on Windows."
 
-    # Try pywin32 win32evtlog if present
+    # 1. Attempt EvtQuery + EvtRender (Windows Vista+ Event Log XML API)
+    try:
+        import win32evtlog  # type: ignore
+        flags = win32evtlog.EvtQueryChannelPath | win32evtlog.EvtQueryReverseDirection
+        xpath = "*[System[(EventID=1000 or EventID=1001 or EventID=1002)]]"
+        q_handle = win32evtlog.EvtQuery("Application", flags, xpath)
+        raw_events = win32evtlog.EvtNext(q_handle, max_records)
+        events: List[SystemErrorEvent] = []
+        for ev in raw_events:
+            xml_str = win32evtlog.EvtRender(ev, win32evtlog.EvtRenderEventXml)
+            parsed_evt = parse_event_xml(xml_str)
+            if parsed_evt is not None:
+                events.append(parsed_evt)
+
+        return events, f"Operational (XML API retrieved {len(events)} events)"
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.debug("EvtQuery XML query failed: %s; falling back to legacy EventLog", exc)
+
+    # 2. Legacy pywin32 OpenEventLog fallback
     try:
         import win32evtlog  # type: ignore
         server = "localhost"

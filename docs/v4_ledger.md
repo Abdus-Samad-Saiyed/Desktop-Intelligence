@@ -32,7 +32,7 @@ Status as of Phase 0 baseline audit (2026-10-20).
 | 9.1.2 | Constrained layout for figures (no `tight_layout()`) | TODO | `desktop_intelligence/visualization/charts.py:137,273` (still has `fig.tight_layout()`) | Phase 1: `test_no_tight_layout_in_charts` |
 | 9.1.3 | Transparent chart surfaces matching cards | TODO | `desktop_intelligence/visualization/charts.py:286` (`background-color: transparent`, but patches have default opacity) | Phase 1: `test_canvas_fills_card` |
 | 9.2 | Durations as hours and minutes (no decimal hours) | DONE | `desktop_intelligence/formatting.py`, `ui/pages/overview.py:281`, `ui/pages/usage.py:121`, `charts.py` | `tests/unit/test_v4_formatting.py:test_format_duration_cases, test_usage_table_duration_item_sorting, test_no_decimal_hours_in_ui` |
-| 9.3 | Reliability events parsed from real Event Log XML | PARTIAL | `desktop_intelligence/collectors/system_errors.py:70-130` (uses StringInserts join; needs EvtRender XML) | `tests/unit/test_stage4_reliability_events.py` |
+| 9.3 | Reliability events parsed from real Event Log XML | DONE | `desktop_intelligence/collectors/system_errors.py:200-300` (`EvtQuery` + `EvtRender` XML parsing with `xml.etree`) | `tests/unit/test_stage4_reliability_events.py:test_parse_event_xml_*` |
 | 9.4 | Single-flight DataLoaderWorker and Qt thread cleanup | DONE | `desktop_intelligence/ui/main_window.py:334-350` (`_active_worker`, `_refresh_pending`, `deleteLater`) | `tests/unit/test_stage8_ui_correctness.py:test_main_window_single_flight_worker` |
 | 9.5 | Glassmorphism design tokens & WCAG AA accessible contrast | DONE | `desktop_intelligence/ui/theme.py:23-38,333-339` (`get_contrast_text_color`) | `tests/unit/test_stage8_ui_correctness.py:test_accent_presets_and_contrast_wcag_compliance` |
 

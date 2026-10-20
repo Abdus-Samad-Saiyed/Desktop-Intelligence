@@ -188,3 +188,99 @@ def test_reliability_events_caching(monkeypatch):
     clear_errors_cache()
 
 
+def test_parse_event_xml_crash_event_1000():
+    """Verify parse_event_xml handles Application Error (ID 1000) XML correctly."""
+    from desktop_intelligence.collectors.system_errors import parse_event_xml
+
+    xml_data = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'>
+      <System>
+        <Provider Name='Application Error'/>
+        <EventID>1000</EventID>
+        <TimeCreated SystemTime='2026-10-20T10:15:30.1234567Z'/>
+      </System>
+      <EventData>
+        <Data Name='AppName'>code.exe</Data>
+        <Data Name='AppVersion'>1.85.0.0</Data>
+        <Data Name='AppTimeStamp'>654321ab</Data>
+        <Data Name='FaultModuleName'>v8.dll</Data>
+        <Data Name='FaultModuleVersion'>1.85.0.0</Data>
+        <Data Name='FaultModuleTimeStamp'>654321cd</Data>
+        <Data Name='ExceptionCode'>c0000005</Data>
+        <Data Name='FaultOffset'>0000000000123456</Data>
+        <Data Name='ProcessId'>12345</Data>
+      </EventData>
+    </Event>"""
+
+    evt = parse_event_xml(xml_data)
+    assert evt is not None
+    assert evt.app_name == "code.exe"
+    assert evt.faulting_module == "v8.dll"
+    assert evt.error_code == "0xC0000005"
+    assert evt.severity == "Crash"
+    assert evt.event_id == 1000
+    assert "2026-10-20T10:15:30.1234567Z" in evt.event_ts_utc
+    assert "code.exe" in evt.description
+
+
+def test_parse_event_xml_hang_event_1002():
+    """Verify parse_event_xml handles Application Hang (ID 1002) XML correctly."""
+    from desktop_intelligence.collectors.system_errors import parse_event_xml
+
+    xml_data = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'>
+      <System>
+        <Provider Name='Application Hang'/>
+        <EventID>1002</EventID>
+        <TimeCreated SystemTime='2026-10-20T11:00:00.0000000Z'/>
+      </System>
+      <EventData>
+        <Data Name='AppName'>notepad.exe</Data>
+        <Data Name='ProcessId'>5432</Data>
+        <Data Name='HangType'>1344</Data>
+      </EventData>
+    </Event>"""
+
+    evt = parse_event_xml(xml_data)
+    assert evt is not None
+    assert evt.app_name == "notepad.exe"
+    assert evt.severity == "Hang"
+    assert evt.event_id == 1002
+    assert "stopped interacting" in evt.description
+
+
+def test_parse_event_xml_wer_event_1001():
+    """Verify parse_event_xml handles Windows Error Reporting (ID 1001) XML correctly."""
+    from desktop_intelligence.collectors.system_errors import parse_event_xml
+
+    xml_data = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'>
+      <System>
+        <Provider Name='Windows Error Reporting'/>
+        <EventID>1001</EventID>
+        <TimeCreated SystemTime='2026-10-20T12:00:00.0000000Z'/>
+      </System>
+      <EventData>
+        <Data Name='EventName'>APPCRASH</Data>
+        <Data Name='P1'>browser.exe</Data>
+        <Data Name='P4'>core.dll</Data>
+        <Data Name='P7'>c0000409</Data>
+      </EventData>
+    </Event>"""
+
+    evt = parse_event_xml(xml_data)
+    assert evt is not None
+    assert evt.app_name == "browser.exe"
+    assert evt.faulting_module == "core.dll"
+    assert evt.error_code == "0xC0000409"
+    assert evt.severity == "Report"
+    assert evt.event_id == 1001
+
+
+def test_parse_event_xml_invalid_and_empty():
+    """Verify parse_event_xml gracefully handles empty, invalid, or malformed XML."""
+    from desktop_intelligence.collectors.system_errors import parse_event_xml
+
+    assert parse_event_xml("") is None
+    assert parse_event_xml("   ") is None
+    assert parse_event_xml("<NotAnEvent>broken</broken>") is None
+
+
+
