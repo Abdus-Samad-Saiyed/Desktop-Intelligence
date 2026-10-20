@@ -43,9 +43,10 @@ def generate_recommendations(
         sig = f"{r.get('category')}::{r.get('subject')}"
         if status in {"pending", "approved"}:
             existing_signatures.add(sig)
-        elif status in {"declined", "dismissed"}:
+        elif status in {"declined", "dismissed", "rejected"}:
             try:
-                c_dt = parse_utc_iso(r.get("created_ts_utc", ""))
+                ts_str = r.get("updated_ts_utc") or r.get("created_ts_utc", "")
+                c_dt = parse_utc_iso(ts_str)
                 if c_dt > cooldown_cutoff:
                     existing_signatures.add(sig)
             except Exception:

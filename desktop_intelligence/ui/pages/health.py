@@ -152,7 +152,10 @@ class HealthPage(QWidget):
             self.hog_table.setItem(r_idx, 1, QTableWidgetItem(f"{f.max_memory_percent:.1f}%"))
             self.hog_table.setItem(r_idx, 2, QTableWidgetItem(f"{f.avg_memory_percent:.1f}%"))
             self.hog_table.setItem(r_idx, 3, QTableWidgetItem(format_bytes_to_human(f.max_rss_bytes)))
-            self.hog_table.setItem(r_idx, 4, QTableWidgetItem(str(f.sustained_samples)))
+            obs_text = f"{f.exceedance_samples} / {f.total_samples}" if f.total_samples > f.exceedance_samples else str(f.sustained_samples)
+            obs_item = QTableWidgetItem(obs_text)
+            obs_item.setToolTip(f"{f.exceedance_samples} exceedance observations out of {f.total_samples} total recorded samples")
+            self.hog_table.setItem(r_idx, 4, obs_item)
 
             status_item = QTableWidgetItem("HIGH USAGE ALERT" if f.is_hog else "Normal")
             if f.is_hog:

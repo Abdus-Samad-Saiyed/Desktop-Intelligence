@@ -252,6 +252,15 @@ class ActivityManager:
         now_ts = event.timestamp_utc
         p_name = (event.process_name or "").strip()
         norm_name = p_name.lower()
+        is_transient = bool(event.metadata and event.metadata.get("is_transient_shell"))
+
+        # If this is transient shell noise (e.g. clicking taskbar, alt-tab preview),
+        # do not disrupt or split the active application session
+        if is_transient:
+            if self.active_session:
+                self.active_session.last_active_utc = now_ts
+                self._save_open_session_state(self.active_session)
+            return
 
         # Idempotence: if same process and pid as current active session, just update last active
         if self.active_session:

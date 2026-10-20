@@ -42,10 +42,10 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 10.A | Inventory launch counting from process_start only | PARTIAL | `desktop_intelligence/app.py:245-285` (still uses `max(counts, session_count)`) | Phase 4: `test_inventory_launch_counts_only_from_process_start` |
-| 10.B | Resource hog observations vs exceedances | PARTIAL | `desktop_intelligence/analytics/resources.py:40` (`sustained_samples = over_count`) | Phase 4: `test_resource_hogs_time_span_and_exceedance_separation` |
-| 10.C | Explorer window noise diagnosis & transient filtering | TODO | `desktop_intelligence/collectors/activity_manager.py:28` (`SHELL_PROCESSES`) | Phase 4: `scripts/diagnose_foreground.py` & classifier tests |
-| 10.D | Recommendation dismissals cooldown (`rejected` status) | PARTIAL | `desktop_intelligence/analytics/recommendations.py:145` (`declined`, `dismissed` vs `rejected`) | Phase 4: `test_recommendation_dismissal_rejection_cooldown` |
+| 10.A | Inventory launch counting from process_start only | DONE | `desktop_intelligence/app.py:240-275` (counts strictly from `process_start` events) | `tests/unit/test_v4_data_truth.py:test_inventory_launch_counts_only_from_process_start` |
+| 10.B | Resource hog observations vs exceedances | DONE | `desktop_intelligence/analytics/resources.py:11-70`, `ui/pages/health.py:155` | `tests/unit/test_v4_data_truth.py:test_resource_hogs_time_span_and_exceedance_separation` |
+| 10.C | Explorer window noise diagnosis & transient filtering | DONE | `desktop_intelligence/collectors/foreground_events.py:75-140`, `activity_manager.py:255-270`, `scripts/diagnose_foreground.py` | `tests/unit/test_v4_data_truth.py:test_transient_shell_noise_filtering` |
+| 10.D | Recommendation dismissals cooldown (`rejected` status) | DONE | `desktop_intelligence/analytics/recommendations.py:44-55` (`rejected` status cooldown) | `tests/unit/test_v4_data_truth.py:test_recommendation_dismissal_rejection_cooldown` |
 
 ---
 

@@ -17,6 +17,9 @@ class ResourceHogFinding:
     max_rss_bytes: int
     is_hog: bool
     reason: str
+    total_samples: int = 0
+    exceedance_samples: int = 0
+    observation_span_seconds: float = 0.0
 
 
 def analyze_resource_hogs(
@@ -39,6 +42,7 @@ def analyze_resource_hogs(
             continue
 
         mem_arr = mem_series.to_numpy(dtype=np.float64)
+        total_samples = len(mem_arr)
         over_threshold_mask = mem_arr >= threshold
         over_count = int(np.sum(over_threshold_mask))
 
@@ -48,14 +52,22 @@ def analyze_resource_hogs(
         rss_series = group["rss_bytes"].dropna()
         max_rss = int(rss_series.max()) if not rss_series.empty else 0
 
+        # Calculate time span if timestamp column available
+        span_seconds = 0.0
+        ts_col = "sample_ts_utc" if "sample_ts_utc" in group.columns else ("timestamp_utc" if "timestamp_utc" in group.columns else None)
+        if ts_col:
+            ts_series = pd.to_datetime(group[ts_col].dropna(), errors="coerce")
+            if len(ts_series) >= 2:
+                span_seconds = max(0.0, float((ts_series.max() - ts_series.min()).total_seconds()))
+
         is_hog = over_count >= min_count
         if is_hog:
             reason = (
-                f"Process exceeded memory threshold of {threshold:.1f}% across {over_count} "
-                f"distinct observations (max: {max_mem:.1f}%)."
+                f"Process exceeded memory threshold of {threshold:.1f}% in {over_count} of {total_samples} "
+                f"observations (max: {max_mem:.1f}%)."
             )
         else:
-            reason = f"Normal consumption within threshold (max: {max_mem:.1f}%)."
+            reason = f"Normal consumption: {over_count} of {total_samples} observations exceeded {threshold:.1f}% (max: {max_mem:.1f}%)."
 
         findings.append(
             ResourceHogFinding(
@@ -66,6 +78,9 @@ def analyze_resource_hogs(
                 max_rss_bytes=max_rss,
                 is_hog=is_hog,
                 reason=reason,
+                total_samples=total_samples,
+                exceedance_samples=over_count,
+                observation_span_seconds=span_seconds,
             )
         )
 

@@ -103,6 +103,50 @@ def resolve_uwp_window(hwnd: int) -> tuple[int, str, str]:
     return (frame_pid, proc_name, exe_path)
 
 
+def get_window_class(hwnd: int) -> str:
+    """Retrieve Win32 window class name for an HWND."""
+    if sys.platform != "win32" or not hwnd:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(256)
+        if ctypes.windll.user32.GetClassNameW(hwnd, buf, 256):
+            return buf.value
+    except Exception:
+        pass
+    return ""
+
+
+TRANSIENT_SHELL_CLASSES = {
+    "shell_traywnd",
+    "shell_secondarytraywnd",
+    "progman",
+    "workerw",
+    "notifyiconoverflowwindow",
+    "windows.ui.core.corewindow",
+    "xaml_windowedpopupclass",
+    "alttab",
+    "taskswitchwnd",
+    "launcher_overflow_window",
+    "cortanawindow",
+}
+
+
+def is_transient_shell_window(proc_name: str, win_class: str) -> bool:
+    """Determine whether an observed window event is transient shell noise (e.g. taskbar click)."""
+    p_norm = (proc_name or "").lower().strip()
+    c_norm = (win_class or "").lower().strip()
+
+    if c_norm in TRANSIENT_SHELL_CLASSES:
+        return True
+
+    # If explorer.exe, only CabinetWClass / ExploreWClass are actual File Explorer windows
+    if p_norm == "explorer.exe":
+        if c_norm and c_norm not in {"cabinetwclass", "explorewclass"}:
+            return True
+
+    return False
+
+
 class WindowsForegroundHook(BaseEventSource):
     """Listens for Windows foreground window change events using SetWinEventHook."""
 
@@ -154,6 +198,9 @@ class WindowsForegroundHook(BaseEventSource):
 
             if event == EVENT_SYSTEM_FOREGROUND and hwnd:
                 target_pid, proc_name, exe_path = resolve_uwp_window(hwnd)
+                win_class = get_window_class(hwnd)
+                is_transient = is_transient_shell_window(proc_name, win_class)
+
                 # Skip own process to prevent dashboard observing itself
                 if target_pid > 0 and target_pid != os.getpid():
                     now = self.clock.now_utc()
@@ -166,6 +213,10 @@ class WindowsForegroundHook(BaseEventSource):
                         exe_path=exe_path,
                         timestamp_utc=now,
                         event_source="winevent",
+                        metadata={
+                            "window_class": win_class,
+                            "is_transient_shell": is_transient,
+                        },
                     )
                     try:
                         self.callback(raw_event)

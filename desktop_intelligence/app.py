@@ -39,18 +39,30 @@ logger = logging.getLogger("desktop_intelligence")
 class DesktopIntelligenceApp:
     """Coordinates lifecycle of storage, background collectors, scheduler, and UI."""
 
-    def __init__(self, config_path: Optional[Path] = None):
-        self.paths = resolve_paths(config_file_override=config_path)
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        paths: Optional[ResolvedPaths] = None,
+        store: Optional[CsvStore] = None,
+        config: Optional[AppConfig] = None,
+    ):
+        if paths is not None:
+            self.paths = paths
+        else:
+            self.paths = resolve_paths(config_file_override=config_path)
         self.paths.ensure_directories()
 
-        self.config = load_config(self.paths.config_file, fallback_on_missing=True)
-        if self.config.paths.data_dir or self.config.paths.log_dir:
-            self.paths = resolve_paths(config_file_override=config_path, config=self.config)
-            self.paths.ensure_directories()
+        if config is not None:
+            self.config = config
+        else:
+            self.config = load_config(self.paths.config_file, fallback_on_missing=True)
+            if self.config.paths.data_dir or self.config.paths.log_dir:
+                self.paths = resolve_paths(config_file_override=config_path, config=self.config)
+                self.paths.ensure_directories()
         setup_logging(self.paths.log_dir, self.config.general.log_level)
 
         self.clock = SystemClock()
-        self.store = CsvStore(self.paths)
+        self.store = store or CsvStore(self.paths)
 
         # Initialize event sources
         event_sources = []
@@ -233,7 +245,7 @@ class DesktopIntelligenceApp:
 
     def refresh_inventory(self) -> List[InventoryItem]:
         """Scan installed applications and update application_inventory.csv."""
-        scanner = ApplicationInventoryScanner(clock=self.clock)
+        scanner = getattr(self, "inventory_scanner", None) or ApplicationInventoryScanner(clock=self.clock)
 
         # Correlate with launch counts and last launches
         counts: Dict[str, int] = {}
@@ -259,17 +271,6 @@ class DesktopIntelligenceApp:
                     counts[k] = counts.get(k, 0) + 1
                     if ts and (k not in last_launches or ts > last_launches[k]):
                         last_launches[k] = ts
-
-        # 2. Also incorporate sessions
-        sessions = self.store.read_dataframe("activity_sessions", self.paths.activity_sessions_csv)
-        if not sessions.empty and "process_name" in sessions.columns:
-            for app_name, group in sessions.groupby("process_name"):
-                name_key = str(app_name).lower().strip()
-                s_count = int(len(group))
-                counts[name_key] = max(counts.get(name_key, 0), s_count)
-                s_max = str(group["end_ts_utc"].max()).strip()
-                if s_max and (name_key not in last_launches or s_max > last_launches[name_key]):
-                    last_launches[name_key] = s_max
 
         # Existing first seen timestamps
         existing_rows = self.store.read_rows("application_inventory", self.paths.application_inventory_csv)
