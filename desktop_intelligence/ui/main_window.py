@@ -261,7 +261,10 @@ class MainWindow(QMainWindow):
         self.page_usage = UsagePage()
         self.page_health = HealthPage()
         self.page_apps = ApplicationsPage()
-        self.page_automation = AutomationPage(on_toggle_automation=self._handle_toggle_automation)
+        self.page_automation = AutomationPage(
+            on_toggle_automation=self._handle_toggle_automation,
+            on_mode_changed=self._handle_change_automation_mode,
+        )
         self.page_settings = SettingsPage(
             config=self.config, paths=self.paths, on_save_config=self._handle_save_config
         )
@@ -491,7 +494,12 @@ class MainWindow(QMainWindow):
         self.page_apps.update_data(inventory_items)
 
         # Update Automation
-        self.page_automation.update_data(self.config.automation.enabled, recommendations, logs)
+        self.page_automation.update_data(
+            self.config.automation.enabled,
+            recommendations,
+            logs,
+            mode=self.config.automation.mode,
+        )
 
         # Update collector status indicators
         if hasattr(self, "status_diag"):
@@ -551,6 +559,16 @@ class MainWindow(QMainWindow):
 
     def _handle_toggle_automation(self, enabled: bool) -> None:
         self.config.automation.enabled = enabled
+        if enabled and self.config.automation.mode == "off":
+            self.config.automation.mode = "prompt"
+        elif not enabled:
+            self.config.automation.mode = "off"
+        self._persist_config()
+        self.trigger_refresh()
+
+    def _handle_change_automation_mode(self, mode: str) -> None:
+        self.config.automation.mode = mode
+        self.config.automation.enabled = (mode != "off")
         self._persist_config()
         self.trigger_refresh()
 

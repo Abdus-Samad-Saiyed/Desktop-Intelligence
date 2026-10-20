@@ -105,9 +105,13 @@ class AutomationScheduler:
         current_time_bucket = f"{local_dt.hour:02d}:{b_minute:02d}"
 
         for rule in self.rules:
-            # 1. Master automation enabled check
-            if not self.config.automation.enabled:
-                continue
+            # 1. Master automation enabled and mode check
+            mode = getattr(self.config.automation, "mode", "off").lower()
+            if not self.config.automation.enabled or mode == "off":
+                if not self.config.automation.enabled:
+                    continue
+                # Dynamic migration for legacy code/tests toggling enabled=True with default mode
+                mode = "prompt" if self.consent_provider else "auto"
 
             # 2. Rule approval and enabled check
             if not rule.approved or not rule.enabled:
@@ -151,8 +155,23 @@ class AutomationScheduler:
                     rule.last_triggered_date = local_date_str
                     continue
 
-            # 7. Consent check if prompt is configured
-            if self.consent_provider:
+            # 7. Consent check according to automation mode
+            if mode == "prompt":
+                if not self.consent_provider:
+                    # Item 12.3: Headless refusal to launch without consent channel
+                    log = AutomationLogRecord(
+                        log_id=new_id("log"),
+                        ts_utc=now_ts_str,
+                        rule_id=rule.rule_id,
+                        action="prompt",
+                        result="skipped_no_consent_channel",
+                        reason="Prompt mode requires consent provider, but none is attached (headless mode)",
+                    )
+                    self.store.append_automation_log(log)
+                    executed_logs.append(log)
+                    rule.last_triggered_date = local_date_str
+                    continue
+
                 timeout_sec = self.config.automation.prompt_timeout_seconds
                 response = self.consent_provider(rule, timeout_sec)
                 if response == "reject":
@@ -183,6 +202,8 @@ class AutomationScheduler:
                         executed_logs.append(log)
                         rule.last_triggered_date = local_date_str
                         continue
+            elif mode == "notify":
+                logger.info("Automation notify mode: rule %s (%s) executing", rule.rule_id, rule.app_name)
 
             # 8. Execute launch
             success, msg = self.launcher.launch(rule.exe_path)

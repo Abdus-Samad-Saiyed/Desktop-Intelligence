@@ -68,6 +68,7 @@ class ResourcesConfig:
 @dataclass
 class AutomationConfig:
     enabled: bool = False
+    mode: str = "off"
     require_rule_approval: bool = True
     prompt_timeout_seconds: int = 10
     no_response_action: str = "skip"
@@ -174,6 +175,7 @@ sustained_observation_count = {_toml_format_value(config.resources.sustained_obs
 
 [automation]
 enabled = {_toml_format_value(config.automation.enabled)}
+mode = {_toml_format_value(config.automation.mode)}
 require_rule_approval = {_toml_format_value(config.automation.require_rule_approval)}
 prompt_timeout_seconds = {_toml_format_value(config.automation.prompt_timeout_seconds)}
 no_response_action = {_toml_format_value(config.automation.no_response_action)}
@@ -324,6 +326,10 @@ def validate_config_dict(data: Dict[str, Any]) -> None:
     aut = data.get("automation", {})
     if not isinstance(aut, dict):
         raise ConfigValidationError("[automation] must be a table")
+    if "mode" in aut:
+        v = str(aut["mode"]).lower()
+        if v not in {"off", "prompt", "auto", "notify"}:
+            raise ConfigValidationError(f"[automation].mode must be one of ['off', 'prompt', 'auto', 'notify'], got {aut['mode']!r}")
     if "no_response_action" in aut:
         v = str(aut["no_response_action"]).lower()
         if v not in {"skip", "launch"}:
@@ -376,6 +382,22 @@ def load_config(path: Optional[Path] = None, fallback_on_missing: bool = True) -
 
     validate_config_dict(raw_data)
 
+    aut_dict = raw_data.get("automation", {})
+    filtered_aut = _filter_known_fields(AutomationConfig, aut_dict)
+    if "mode" not in aut_dict:
+        legacy_enabled = aut_dict.get("enabled", False)
+        legacy_req_approval = aut_dict.get("require_rule_approval", True)
+        if not legacy_enabled:
+            filtered_aut["mode"] = "off"
+            filtered_aut["enabled"] = False
+        else:
+            filtered_aut["enabled"] = True
+            filtered_aut["mode"] = "prompt" if legacy_req_approval else "auto"
+    else:
+        mode_val = str(aut_dict["mode"]).lower()
+        filtered_aut["mode"] = mode_val
+        filtered_aut["enabled"] = (mode_val != "off")
+
     config = AppConfig(
         general=GeneralConfig(**_filter_known_fields(GeneralConfig, raw_data.get("general", {}))),
         paths=PathsConfig(**_filter_known_fields(PathsConfig, raw_data.get("paths", {}))),
@@ -383,7 +405,7 @@ def load_config(path: Optional[Path] = None, fallback_on_missing: bool = True) -
         retention=RetentionConfig(**_filter_known_fields(RetentionConfig, raw_data.get("retention", {}))),
         patterns=PatternsConfig(**_filter_known_fields(PatternsConfig, raw_data.get("patterns", {}))),
         resources=ResourcesConfig(**_filter_known_fields(ResourcesConfig, raw_data.get("resources", {}))),
-        automation=AutomationConfig(**_filter_known_fields(AutomationConfig, raw_data.get("automation", {}))),
+        automation=AutomationConfig(**filtered_aut),
         ui=UIConfig(**_filter_known_fields(UIConfig, raw_data.get("ui", {}))),
         llm=LLMConfig(**_filter_known_fields(LLMConfig, raw_data.get("llm", {}))),
     )

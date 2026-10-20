@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -22,9 +23,15 @@ from desktop_intelligence.models import AutomationLogRecord, RecommendationRecor
 class AutomationPage(QWidget):
     """Automation rules and execution log audit page."""
 
-    def __init__(self, on_toggle_automation: Optional[Callable[[bool], None]] = None, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        on_toggle_automation: Optional[Callable[[bool], None]] = None,
+        on_mode_changed: Optional[Callable[[str], None]] = None,
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self.on_toggle_automation = on_toggle_automation
+        self.on_mode_changed = on_mode_changed
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -48,6 +55,22 @@ class AutomationPage(QWidget):
         self.master_checkbox.toggled.connect(self._on_toggle)
         top_bar.addWidget(self.master_checkbox)
         header_box.addLayout(top_bar)
+
+        # Mode Selector Bar
+        mode_bar = QHBoxLayout()
+        mode_label = QLabel("Automation Mode:")
+        mode_label.setStyleSheet("font-size: 12px; font-weight: 600;")
+        mode_bar.addWidget(mode_label)
+
+        self.combo_mode = QComboBox()
+        self.combo_mode.addItem("Disabled (Off)", "off")
+        self.combo_mode.addItem("Prompt (Interactive Confirmation)", "prompt")
+        self.combo_mode.addItem("Autonomous (Silent Launch)", "auto")
+        self.combo_mode.addItem("Notify (Launch with Alert)", "notify")
+        self.combo_mode.currentIndexChanged.connect(self._on_mode_selected)
+        mode_bar.addWidget(self.combo_mode)
+        mode_bar.addStretch()
+        header_box.addLayout(mode_bar)
 
         # Consent banner
         self.banner = QLabel(
@@ -97,19 +120,53 @@ class AutomationPage(QWidget):
         layout.addWidget(self.log_table, stretch=1)
 
     def _on_toggle(self, checked: bool) -> None:
-        if self.on_toggle_automation:
+        target_mode = "prompt" if checked else "off"
+        self.combo_mode.blockSignals(True)
+        idx = self.combo_mode.findData(target_mode)
+        if idx >= 0:
+            self.combo_mode.setCurrentIndex(idx)
+        self.combo_mode.blockSignals(False)
+
+        if self.on_mode_changed:
+            self.on_mode_changed(target_mode)
+        elif self.on_toggle_automation:
             self.on_toggle_automation(checked)
+
+    def _on_mode_selected(self, index: int) -> None:
+        mode = self.combo_mode.itemData(index)
+        if not mode:
+            return
+        is_enabled = (mode != "off")
+        self.master_checkbox.blockSignals(True)
+        self.master_checkbox.setChecked(is_enabled)
+        self.master_checkbox.blockSignals(False)
+
+        if self.on_mode_changed:
+            self.on_mode_changed(mode)
+        elif self.on_toggle_automation:
+            self.on_toggle_automation(is_enabled)
 
     def update_data(
         self,
         automation_enabled: bool,
         rules: List[RecommendationRecord],
         logs: List[AutomationLogRecord],
+        mode: str = "off",
     ) -> None:
         """Update automation state, rules table, and execution log table."""
         self.master_checkbox.blockSignals(True)
         self.master_checkbox.setChecked(automation_enabled)
         self.master_checkbox.blockSignals(False)
+
+        self.combo_mode.blockSignals(True)
+        idx = self.combo_mode.findData(mode)
+        if idx >= 0:
+            self.combo_mode.setCurrentIndex(idx)
+        else:
+            fallback = "prompt" if automation_enabled else "off"
+            f_idx = self.combo_mode.findData(fallback)
+            self.combo_mode.setCurrentIndex(f_idx if f_idx >= 0 else 0)
+        self.combo_mode.blockSignals(False)
 
         # Approved rules
         approved_rules = [r for r in rules if r.status == "approved"]

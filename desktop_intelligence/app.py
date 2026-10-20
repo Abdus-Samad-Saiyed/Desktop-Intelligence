@@ -466,9 +466,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             is_demo_mode=app.is_demo_mode,
         )
 
-        # Wire GUI consent prompt
-        from desktop_intelligence.ui.dialogs.consent_prompt import show_launch_consent_dialog
-        app.scheduler.consent_provider = lambda rule, timeout: show_launch_consent_dialog(rule, timeout, parent=window)
+        # Wire thread-safe GUI consent broker
+        from desktop_intelligence.ui.consent_broker import ConsentBroker
+        consent_broker = ConsentBroker(parent_window=window)
+        app.scheduler.consent_provider = consent_broker.request_consent
+        window._consent_broker = consent_broker
 
         if not app.config.ui.start_minimized:
             window.show()

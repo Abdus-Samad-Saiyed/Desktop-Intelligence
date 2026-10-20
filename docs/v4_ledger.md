@@ -63,9 +63,9 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 12.1 | Automation modes (off, prompt, auto, notify) & config migration | PARTIAL | `desktop_intelligence/config.py:45` (`enabled = false`, `require_rule_approval`) | Phase 7: `test_automation_modes_config_migration` |
-| 12.2 | Thread-safe `ConsentBroker` on GUI thread with signals & futures | PARTIAL | `desktop_intelligence/app.py:440` (lambda directly triggers dialog) | Phase 7: `test_consent_broker_thread_safety` |
-| 12.3 | Headless `--collector-only` refusal to launch without consent channel | TODO | `desktop_intelligence/automation/scheduler.py` | Phase 7: `test_headless_collector_skips_without_consent_channel` |
+| 12.1 | Automation modes (off, prompt, auto, notify) & config migration | DONE | `desktop_intelligence/config.py:70-76,380-405`, `desktop_intelligence/ui/pages/automation.py:53-75` | `tests/unit/test_v4_automation_consent.py:test_automation_modes_config_migration` |
+| 12.2 | Thread-safe `ConsentBroker` on GUI thread with signals & futures | DONE | `desktop_intelligence/ui/consent_broker.py:15-60`, `desktop_intelligence/app.py:469-474` | `tests/unit/test_v4_automation_consent.py:test_consent_broker_thread_safety` |
+| 12.3 | Headless `--collector-only` refusal to launch without consent channel | DONE | `desktop_intelligence/automation/scheduler.py:108-185` (`result="skipped_no_consent_channel"`) | `tests/unit/test_v4_automation_consent.py:test_headless_collector_skips_without_consent_channel` |
 
 ---
 
