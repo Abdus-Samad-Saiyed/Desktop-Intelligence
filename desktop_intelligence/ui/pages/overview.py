@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop_intelligence.analytics.usage import calculate_usage_summary
+from desktop_intelligence.formatting import UNAVAILABLE, format_duration
 from desktop_intelligence.models import RecommendationRecord
 from desktop_intelligence.visualization.charts import ThemedChartCanvas, create_top_apps_chart, create_empty_figure
 import pandas as pd
@@ -26,7 +27,7 @@ import pandas as pd
 class MetricCard(QFrame):
     """Clean metric summary card with design token styling."""
 
-    def __init__(self, title: str, initial_value: str = "-", parent: Optional[QWidget] = None):
+    def __init__(self, title: str, initial_value: str = UNAVAILABLE, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setObjectName("glass_card")
@@ -175,8 +176,8 @@ class OverviewPage(QWidget):
         # 4 Metric Cards
         metrics_layout = QHBoxLayout()
         metrics_layout.setSpacing(14)
-        self.card_active = MetricCard("TOTAL ACTIVE TIME", "0.0 hrs")
-        self.card_top_app = MetricCard("PRIMARY APPLICATION", "None")
+        self.card_active = MetricCard("TOTAL ACTIVE TIME", UNAVAILABLE)
+        self.card_top_app = MetricCard("PRIMARY APPLICATION", UNAVAILABLE)
         self.card_sessions = MetricCard("TOTAL SESSIONS", "0")
         self.card_freshness = MetricCard("DATA FRESHNESS", "Up to date")
 
@@ -277,8 +278,7 @@ class OverviewPage(QWidget):
 
         if sessions_df is not None and not sessions_df.empty:
             summary_df = calculate_usage_summary(sessions_df)
-            total_active = round(float(sessions_df["active_seconds"].sum() / 3600.0), 1)
-            self.card_active.set_value(f"{total_active} hrs")
+            self.card_active.set_value(format_duration(total_active_sec, use_days=True))
             self.card_sessions.set_value(str(len(sessions_df)))
 
             if not summary_df.empty:
@@ -289,9 +289,11 @@ class OverviewPage(QWidget):
                     summary_df, top_n=6, theme_mode=theme_mode, accent_color=accent_color
                 )
                 self.chart_canvas.update_figure(fig)
+            else:
+                self.card_top_app.set_value(UNAVAILABLE)
         else:
-            self.card_active.set_value("0.0 hrs")
-            self.card_top_app.set_value("None")
+            self.card_active.set_value(UNAVAILABLE)
+            self.card_top_app.set_value(UNAVAILABLE)
             self.card_sessions.set_value("0")
             fig = create_empty_figure(
                 "No application usage recorded.", theme_mode=theme_mode, accent_color=accent_color

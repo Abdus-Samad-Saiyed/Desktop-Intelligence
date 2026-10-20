@@ -10,9 +10,16 @@ import pandas as pd
 # Use non-interactive backend for embedded generation
 matplotlib.use("Agg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.ticker import MultipleLocator, FuncFormatter
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from desktop_intelligence.formatting import (
+    format_duration,
+    format_duration_hours,
+    nice_time_step_hours,
+    format_tick_hours,
+)
 from desktop_intelligence.ui.theme import get_effective_theme
 
 BASE_DPI = 100.0
@@ -103,7 +110,7 @@ def create_top_apps_chart(
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels(apps, fontsize=9, color=colors["text"])
-    ax.set_xlabel("Active Hours", fontsize=9, color=colors["secondary_text"])
+    ax.set_xlabel("Active time", fontsize=9, color=colors["secondary_text"])
     ax.set_title(f"Top {len(apps)} Applications by Usage Time", fontsize=10, weight="bold", pad=8, color=colors["text"])
 
     ax.grid(axis="x", linestyle="--", alpha=0.4, color=colors["grid"])
@@ -121,11 +128,13 @@ def create_top_apps_chart(
         upper_limit = max_h * 1.15
 
     ax.set_xlim(0, upper_limit)
+    ax.xaxis.set_major_locator(MultipleLocator(nice_time_step_hours(upper_limit)))
+    ax.xaxis.set_major_formatter(FuncFormatter(format_tick_hours))
 
     # Annotate bar values
     for bar in bars:
         w = bar.get_width()
-        val_text = f"{w:.1f}h" if w > 0 else "0h"
+        val_text = format_duration_hours(w)
         offset = max(upper_limit * 0.02, 0.02)
         ax.text(
             w + offset,
@@ -162,14 +171,14 @@ def create_daily_trend_chart(
     ax = fig.add_subplot(111, facecolor=colors["plot_bg"])
 
     x = np.arange(len(dates))
-    ax.plot(x, active, color=colors["accent"], marker="o", markersize=4, label="Active Time", linewidth=2)
-    ax.plot(x, idle, color=colors["idle"], marker="s", markersize=4, label="Idle Time", linewidth=1.5, linestyle="--")
+    ax.plot(x, active, color=colors["accent"], marker="o", markersize=4, label="Active", linewidth=2)
+    ax.plot(x, idle, color=colors["idle"], marker="s", markersize=4, label="Idle", linewidth=1.5, linestyle="--")
 
     ax.set_xticks(x)
     step = max(1, len(dates) // 6)
     labels = [d if i % step == 0 else "" for i, d in enumerate(dates)]
     ax.set_xticklabels(labels, rotation=25, ha="right", fontsize=8, color=colors["secondary_text"])
-    ax.set_ylabel("Hours", fontsize=9, color=colors["secondary_text"])
+    ax.set_ylabel("Time", fontsize=9, color=colors["secondary_text"])
     ax.set_title("Daily Usage Trend", fontsize=10, weight="bold", pad=8, color=colors["text"])
 
     ax.legend(loc="upper left", frameon=False, fontsize=8, labelcolor=colors["text"])
@@ -184,9 +193,13 @@ def create_daily_trend_chart(
     all_vals = active + idle
     max_val = float(np.nanmax(all_vals)) if all_vals and not np.isnan(np.nanmax(all_vals)) else 0.0
     if max_val <= 0.0:
-        ax.set_ylim(0, 1.0)
+        y_limit = 1.0
     else:
-        ax.set_ylim(0, max_val * 1.2)
+        y_limit = max_val * 1.2
+
+    ax.set_ylim(0, y_limit)
+    ax.yaxis.set_major_locator(MultipleLocator(nice_time_step_hours(y_limit)))
+    ax.yaxis.set_major_formatter(FuncFormatter(format_tick_hours))
 
     return fig
 
@@ -213,7 +226,7 @@ def create_day_of_week_chart(
 
     ax.set_xticks(x)
     ax.set_xticklabels(days, fontsize=9, color=colors["text"])
-    ax.set_ylabel("Active Hours", fontsize=9, color=colors["secondary_text"])
+    ax.set_ylabel("Time", fontsize=9, color=colors["secondary_text"])
     ax.set_title("Weekly Distribution", fontsize=10, weight="bold", pad=8, color=colors["text"])
 
     ax.grid(axis="y", linestyle="--", alpha=0.4, color=colors["grid"])
@@ -225,9 +238,13 @@ def create_day_of_week_chart(
 
     max_h = float(np.nanmax(hours)) if hours and not np.isnan(np.nanmax(hours)) else 0.0
     if max_h <= 0.0:
-        ax.set_ylim(0, 1.0)
+        y_limit = 1.0
     else:
-        ax.set_ylim(0, max_h * 1.15)
+        y_limit = max_h * 1.15
+
+    ax.set_ylim(0, y_limit)
+    ax.yaxis.set_major_locator(MultipleLocator(nice_time_step_hours(y_limit)))
+    ax.yaxis.set_major_formatter(FuncFormatter(format_tick_hours))
 
     return fig
 

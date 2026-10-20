@@ -219,7 +219,7 @@ def test_ui_data_dispatch_with_unicode_and_large_datasets(qapp, tmp_path):
     window._on_data_loaded(sessions, samples, inventory, recs, logs, "Operational")
 
     # Overview checks
-    assert window.page_overview.card_active.value_label.text() == "3.0 hrs"
+    assert window.page_overview.card_active.value_label.text() == "3 h"
     assert window.page_overview.card_top_app.value_label.text() == "代码编辑器.exe"
 
     # Usage table checks

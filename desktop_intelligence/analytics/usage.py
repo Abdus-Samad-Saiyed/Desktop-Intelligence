@@ -42,7 +42,8 @@ def calculate_usage_summary(sessions_df: pd.DataFrame) -> pd.DataFrame:
 
     cols = [
         "process_name", "total_hours", "active_hours", "idle_hours",
-        "session_count", "avg_session_min", "median_session_min", "pct_active_time"
+        "session_count", "avg_session_min", "median_session_min", "pct_active_time",
+        "total_seconds", "active_seconds", "idle_seconds", "avg_session_sec", "median_session_sec",
     ]
     return agg_df[cols].sort_values(by="active_hours", ascending=False).reset_index(drop=True)
 

@@ -103,7 +103,7 @@ def test_overview_page_signature_caching_skips_redundant_renders(qapp):
         # First call: Initial render
         page.update_data(sessions_df, recs, freshness_text="Just now")
         assert mock_chart_update.call_count == 1
-        assert page.card_active.value_label.text() == "1.0 hrs"
+        assert page.card_active.value_label.text() == "1 h"
         assert page.card_top_app.value_label.text() == "code.exe"
 
         # Second call with identical data: must update freshness text but SKIP chart update

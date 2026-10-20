@@ -20,12 +20,51 @@ from desktop_intelligence.analytics.usage import (
     calculate_daily_summary,
     calculate_day_of_week_distribution,
 )
+from desktop_intelligence.formatting import UNAVAILABLE, format_duration
 from desktop_intelligence.visualization.charts import (
     ThemedChartCanvas,
     create_daily_trend_chart,
     create_day_of_week_chart,
     create_empty_figure,
 )
+
+
+class NumericItem(QTableWidgetItem):
+    """Table item displaying formatted text and sorting numerically by raw value."""
+
+    def __init__(self, text: str, sort_val: float):
+        super().__init__(text)
+        self.setData(Qt.UserRole, float(sort_val))
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, QTableWidgetItem):
+            v1 = self.data(Qt.UserRole)
+            v2 = other.data(Qt.UserRole)
+            if v1 is not None and v2 is not None:
+                return float(v1) < float(v2)
+        return super().__lt__(other)
+
+
+class DurationItem(NumericItem):
+    """Table item displaying human-formatted duration and sorting numerically by seconds."""
+
+    def __init__(self, seconds: Optional[float]):
+        if seconds is None:
+            super().__init__(UNAVAILABLE, -1.0)
+            return
+        try:
+            sec = float(seconds)
+            if pd.isna(sec):
+                super().__init__(UNAVAILABLE, -1.0)
+                return
+        except (TypeError, ValueError):
+            super().__init__(UNAVAILABLE, -1.0)
+            return
+
+        display_text = format_duration(sec)
+        super().__init__(display_text, sec)
+        if sec >= 0:
+            self.setToolTip(f"{int(round(sec))} s ({sec / 3600.0:.2f} h)")
 
 
 class UsagePage(QWidget):
@@ -80,14 +119,15 @@ class UsagePage(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Application", "Active Hours", "Idle Hours", "Total Hours",
-            "Sessions", "% Active Time", "Avg Session (min)"
+            "Application", "Active Time", "Idle Time", "Total Time",
+            "Sessions", "% Active Time", "Avg Session"
         ])
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
         layout.addWidget(self.table, stretch=3)
 
     def update_data(
@@ -119,12 +159,19 @@ class UsagePage(QWidget):
         self.dow_canvas.update_figure(dow_fig)
 
         # Update table
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(summary))
         for r_idx, row in summary.iterrows():
             self.table.setItem(r_idx, 0, QTableWidgetItem(str(row["process_name"])))
-            self.table.setItem(r_idx, 1, QTableWidgetItem(f"{row['active_hours']:.2f} h"))
-            self.table.setItem(r_idx, 2, QTableWidgetItem(f"{row['idle_hours']:.2f} h"))
-            self.table.setItem(r_idx, 3, QTableWidgetItem(f"{row['total_hours']:.2f} h"))
-            self.table.setItem(r_idx, 4, QTableWidgetItem(str(row["session_count"])))
-            self.table.setItem(r_idx, 5, QTableWidgetItem(f"{row['pct_active_time']:.1f}%"))
-            self.table.setItem(r_idx, 6, QTableWidgetItem(f"{row['avg_session_min']:.1f} m"))
+            active_sec = row["active_seconds"] if "active_seconds" in row else row["active_hours"] * 3600.0
+            idle_sec = row["idle_seconds"] if "idle_seconds" in row else row["idle_hours"] * 3600.0
+            total_sec = row["total_seconds"] if "total_seconds" in row else row["total_hours"] * 3600.0
+            avg_sec = row["avg_session_sec"] if "avg_session_sec" in row else row["avg_session_min"] * 60.0
+
+            self.table.setItem(r_idx, 1, DurationItem(active_sec))
+            self.table.setItem(r_idx, 2, DurationItem(idle_sec))
+            self.table.setItem(r_idx, 3, DurationItem(total_sec))
+            self.table.setItem(r_idx, 4, NumericItem(str(int(row["session_count"])), float(row["session_count"])))
+            self.table.setItem(r_idx, 5, NumericItem(f"{row['pct_active_time']:.1f}%", float(row["pct_active_time"])))
+            self.table.setItem(r_idx, 6, DurationItem(avg_sec))
+        self.table.setSortingEnabled(True)
