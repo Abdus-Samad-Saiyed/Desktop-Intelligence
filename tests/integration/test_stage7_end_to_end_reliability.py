@@ -162,13 +162,25 @@ def test_retention_never_touches_config_or_source_files(tmp_path):
     assert "[general]" in paths.config_file.read_text(encoding="utf-8")
 
 
-def test_main_py_when_venv_interpreter_missing(tmp_path, monkeypatch):
-    """Test that main.py does not crash if venv interpreter is absent."""
-    import main as main_module
+def test_main_py_when_venv_interpreter_missing(tmp_path):
+    """Test in a real subprocess that main.py does not crash when venv interpreter is absent."""
+    import shutil
+    import subprocess
 
-    orig_exists = os.path.exists
-    monkeypatch.setattr(os.path, "exists", lambda p: False if "myenv" in str(p) else orig_exists(p))
+    main_src = Path(__file__).resolve().parents[2] / "main.py"
+    shutil.copy(main_src, tmp_path / "main.py")
 
-    # Calling main.main() should execute diagnostics and return 0 without FileNotFoundError
-    ret = main_module.main(argv=["--diagnostics"])
-    assert ret == 0
+    stub_setup = tmp_path / "setup.py"
+    stub_setup.write_text("def environment(venv, reqs):\n    pass\n", encoding="utf-8")
+
+    pkg_dir = tmp_path / "desktop_intelligence"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (pkg_dir / "app.py").write_text("def main(argv=None):\n    print('STUB_APP_EXECUTED')\n    return 0\n", encoding="utf-8")
+
+    # Run in tmp_path where myenv/ does not exist: must not attempt invalid relaunch, executes main() directly
+    env = dict(os.environ, PYTHONPATH=str(tmp_path))
+    env.pop("DESKTOP_INTELLIGENCE_RELAUNCHED", None)
+    res = subprocess.run([sys.executable, str(tmp_path / "main.py")], env=env, cwd=str(tmp_path), capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "STUB_APP_EXECUTED" in res.stdout

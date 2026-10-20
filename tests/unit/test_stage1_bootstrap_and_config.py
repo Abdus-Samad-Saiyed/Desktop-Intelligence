@@ -105,28 +105,63 @@ def test_saving_settings_leaves_repo_config_hash_unchanged(tmp_path):
     assert current_repo_hash == initial_hash, "Tracked repo config.toml was modified!"
 
 
-def test_relaunch_environment_guard(monkeypatch):
-    """Verify that environment() is skipped when DESKTOP_INTELLIGENCE_RELAUNCHED is 1."""
-    import main as main_module
-    called = []
+def test_relaunch_environment_guard(tmp_path):
+    """Verify in a real subprocess that setup.environment is skipped when DESKTOP_INTELLIGENCE_RELAUNCHED is 1."""
+    import shutil
+    import subprocess
 
-    monkeypatch.setattr(main_module, "environment", lambda v, r: called.append(True))
-    monkeypatch.setenv("DESKTOP_INTELLIGENCE_RELAUNCHED", "1")
+    # 1. Setup isolated test environment
+    main_src = Path(__file__).resolve().parents[2] / "main.py"
+    shutil.copy(main_src, tmp_path / "main.py")
 
-    # Running main should not invoke environment
-    # Verify via import execution logic
-    assert os.environ.get("DESKTOP_INTELLIGENCE_RELAUNCHED") == "1"
+    counter_file = tmp_path / "counter.txt"
+    stub_setup = tmp_path / "setup.py"
+    stub_setup.write_text(
+        "def environment(venv, reqs):\n"
+        f"    with open(r'{counter_file}', 'a') as f:\n"
+        "        f.write('1\\n')\n",
+        encoding="utf-8",
+    )
+
+    pkg_dir = tmp_path / "desktop_intelligence"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (pkg_dir / "app.py").write_text("def main(argv=None):\n    return 0\n", encoding="utf-8")
+
+    # Run with RELAUNCHED=1: setup.environment must NOT be called
+    env_relaunched = dict(os.environ, DESKTOP_INTELLIGENCE_RELAUNCHED="1", PYTHONPATH=str(tmp_path))
+    res1 = subprocess.run([sys.executable, str(tmp_path / "main.py")], env=env_relaunched, cwd=str(tmp_path), capture_output=True, text=True)
+    assert res1.returncode == 0
+    assert not counter_file.exists() or counter_file.read_text().strip() == ""
+
+    # Run without RELAUNCHED: setup.environment MUST be called exactly once
+    env_initial = dict(os.environ, PYTHONPATH=str(tmp_path))
+    env_initial.pop("DESKTOP_INTELLIGENCE_RELAUNCHED", None)
+    res2 = subprocess.run([sys.executable, str(tmp_path / "main.py")], env=env_initial, cwd=str(tmp_path), capture_output=True, text=True)
+    assert res2.returncode == 0
+    assert counter_file.exists() and counter_file.read_text().strip() == "1"
 
 
-def test_main_py_reports_error_when_core_missing(monkeypatch):
-    """Verify that main.main() reports errors and returns non-zero when core cannot be loaded."""
-    import main as main_module
+def test_main_py_reports_error_when_core_missing(tmp_path):
+    """Verify that main.py reports error and returns non-zero when core package fails to import."""
+    import shutil
+    import subprocess
 
-    # Force ImportError on app_main
-    def fake_import_error(argv=None):
-        raise ModuleNotFoundError("No module named 'desktop_intelligence.app'", name="desktop_intelligence.app")
+    main_src = Path(__file__).resolve().parents[2] / "main.py"
+    shutil.copy(main_src, tmp_path / "main.py")
 
-    monkeypatch.setattr(sys, "stderr", sys.stdout)
-    monkeypatch.setattr(main_module, "main", lambda argv=None: 1 if argv == ["--trigger-error"] else 0)
+    stub_setup = tmp_path / "setup.py"
+    stub_setup.write_text("def environment(venv, reqs):\n    pass\n", encoding="utf-8")
 
-    assert main_module.main(["--trigger-error"]) == 1
+    pkg_dir = tmp_path / "desktop_intelligence"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (pkg_dir / "app.py").write_text(
+        "raise ModuleNotFoundError(\"No module named 'desktop_intelligence.app'\", name=\"desktop_intelligence.app\")\n",
+        encoding="utf-8",
+    )
+
+    env = dict(os.environ, DESKTOP_INTELLIGENCE_RELAUNCHED="1", PYTHONPATH=str(tmp_path))
+    res = subprocess.run([sys.executable, str(tmp_path / "main.py")], env=env, cwd=str(tmp_path), capture_output=True, text=True)
+    assert res.returncode == 1
+    assert "Failed to load Desktop Intelligence" in res.stderr

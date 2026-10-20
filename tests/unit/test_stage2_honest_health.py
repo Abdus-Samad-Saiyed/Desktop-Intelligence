@@ -174,10 +174,14 @@ def test_stale_data_freshness_text(qapp, tmp_path):
     assert freshness != "Up to date"
 
 
-def test_no_hardcoded_active_status_in_overview_page():
-    """Verify OverviewPage does not hardcode 'Collection Status: Active'."""
-    page_file = Path(__file__).resolve().parents[2] / "desktop_intelligence" / "ui" / "pages" / "overview.py"
-    content = page_file.read_text(encoding="utf-8")
-    assert 'Collection Status: Active' not in content, (
-        "OverviewPage still contains hardcoded 'Collection Status: Active' string!"
-    )
+def test_no_hardcoded_active_status_in_overview_page(qapp):
+    """Verify OverviewPage status label reflects non-active status honestly and does not display 'Active' when failed."""
+    from desktop_intelligence.ui.pages.overview import OverviewPage
+
+    page = OverviewPage()
+    # Update with failed collection status
+    page.update_data(sessions_df=None, recommendations=[], collection_status_text="Failed (ETW Access Denied)")
+
+    status_text = page.status_label.text()
+    assert "Active" not in status_text
+    assert "Failed" in status_text

@@ -7,6 +7,15 @@ from pathlib import Path
 # Add repo root to python path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import argparse
+
+# Parse scale before creating QApplication
+_pre_parser = argparse.ArgumentParser(add_help=False)
+_pre_parser.add_argument("--scale", type=str, default=None)
+_pre_args, _ = _pre_parser.parse_known_args()
+if _pre_args.scale:
+    os.environ["QT_SCALE_FACTOR"] = str(_pre_args.scale)
+
 # Ensure offscreen Qt platform
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -276,7 +285,7 @@ def build_sample_data():
     return sessions, samples, inventory, recs, logs, errors
 
 
-def capture_all():
+def capture_all(scale: str = None, theme: str = None, output_dir: Path = None, page_filter: list = None):
     app = QApplication.instance() or QApplication(sys.argv)
     from PySide6.QtGui import QFontDatabase
     for f in ["segoeui.ttf", "segoeuib.ttf", "segoeuisb.ttf", "segoeuii.ttf"]:
@@ -284,7 +293,8 @@ def capture_all():
         if Path(p).exists():
             QFontDatabase.addApplicationFont(p)
     app.setFont(QFont("Segoe UI", 9))
-    output_dir = Path("screenshots")
+    if output_dir is None:
+        output_dir = Path("screenshots")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     import tempfile
@@ -299,7 +309,7 @@ def capture_all():
 
     sessions, samples, inventory, recs, logs, errors = build_sample_data()
 
-    pages = [
+    all_pages = [
         ("overview", 0),
         ("usage", 1),
         ("health", 2),
@@ -307,8 +317,14 @@ def capture_all():
         ("automation", 4),
         ("settings", 5),
     ]
+    if page_filter:
+        pages = [p for p in all_pages if p[0] in page_filter]
+    else:
+        pages = all_pages
 
-    for mode in ["dark", "light"]:
+    modes = [theme] if theme else ["dark", "light"]
+
+    for mode in modes:
         accent = "#8B5CF6" if mode == "dark" else "#6957E8"
         window = MainWindow(config=config, paths=paths, store=store)
         window.refresh_timer.stop()
@@ -331,7 +347,8 @@ def capture_all():
             app.processEvents()
 
             pixmap = window.grab()
-            save_path = output_dir / f"{page_name}_{mode}.png"
+            scale_suffix = f"_{scale}" if scale else ""
+            save_path = output_dir / f"{page_name}_{mode}{scale_suffix}.png"
             pixmap.save(str(save_path), "PNG")
             print(f"Captured: {save_path} ({pixmap.width()}x{pixmap.height()})")
 
@@ -341,4 +358,11 @@ def capture_all():
 
 
 if __name__ == "__main__":
-    capture_all()
+    parser = argparse.ArgumentParser(description="Capture Desktop Intelligence screenshots.")
+    parser.add_argument("--scale", type=str, default=None, help="Display scale factor (e.g. 1.0, 1.25, 1.5)")
+    parser.add_argument("--theme", type=str, default=None, choices=["dark", "light"], help="Theme to capture")
+    parser.add_argument("--output-dir", type=Path, default=Path("screenshots"), help="Directory to save screenshots")
+    parser.add_argument("--pages", nargs="*", default=None, help="Subset of page names to capture (e.g. overview usage)")
+    args = parser.parse_args()
+
+    capture_all(scale=args.scale, theme=args.theme, output_dir=args.output_dir, page_filter=args.pages)
