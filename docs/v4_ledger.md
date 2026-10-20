@@ -53,9 +53,9 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 11.1 | `--demo-mode` CLI argument and isolated temporary storage | TODO | `desktop_intelligence/app.py` (not yet implemented) | Phase 6: `test_demo_mode_isolated_storage` |
-| 11.2 | Deterministic seed data exercising all duration formats and edge cases | TODO | `scripts/` (needs demo seed script) | Phase 6: `test_demo_mode_manifest_assertions` |
-| 11.3 | Visible Demo Mode UI banner and launch protection | TODO | `desktop_intelligence/ui/main_window.py` (not yet implemented) | Phase 6: `test_demo_mode_ui_banner` |
+| 11.1 | `--demo-mode` CLI argument and isolated temporary storage | DONE | `desktop_intelligence/app.py:534-548` (isolated temp storage under `_demo_mode` path) | `tests/unit/test_v4_demo_mode.py:test_demo_mode_ui_banner_and_protection` |
+| 11.2 | Deterministic seed data exercising all duration formats and edge cases | DONE | `desktop_intelligence/demo_data.py:17-180` (seed manifest covering seconds, minutes, hours, hogs, recs) | `tests/unit/test_v4_demo_mode.py:test_seed_demo_data_manifest` |
+| 11.3 | Visible Demo Mode UI banner and launch protection | DONE | `desktop_intelligence/ui/main_window.py:65-105` (prominent banner, title tag, config protection) | `tests/unit/test_v4_demo_mode.py:test_demo_mode_ui_banner_and_protection` |
 
 ---
 

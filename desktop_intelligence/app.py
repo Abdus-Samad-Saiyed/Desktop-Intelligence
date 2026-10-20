@@ -94,6 +94,7 @@ class DesktopIntelligenceApp:
 
         self._running = False
         self._periodic_thread: Optional[threading.Thread] = None
+        self.is_demo_mode: bool = False
 
     def get_launcher_allowlist(self) -> Set[str]:
         """Return set of normalized executable paths and binary names from inventory and activity."""
@@ -128,6 +129,17 @@ class DesktopIntelligenceApp:
         if self._running:
             return
         self._running = True
+
+        if self.is_demo_mode:
+            logger.info("Demo mode: running with simulated background services.")
+            if self.foreground_hook:
+                self.foreground_hook.health_state = "active"
+                self.foreground_hook.status_message = "Active (Demo Simulation)"
+            if self.process_listener:
+                self.process_listener.health_state = "active"
+                self.process_listener.status_message = "Active (Demo Simulation)"
+            return
+
         logger.info("Starting Desktop Intelligence background services...")
 
         # 1. Start Activity Manager (hooks and queue)
@@ -382,11 +394,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--diagnostics", action="store_true", help="Print system diagnostics and data status")
     parser.add_argument("--rescan-inventory", action="store_true", help="Perform application inventory discovery scan")
     parser.add_argument("--collector-only", "--headless", action="store_true", help="Run background collector without GUI")
+    parser.add_argument("--demo-mode", action="store_true", help="Launch in isolated demo mode with deterministic simulated data")
     parser.add_argument("--config", type=Path, default=None, help="Custom path to config.toml")
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
-    app = DesktopIntelligenceApp(config_path=args.config)
+    if args.demo_mode:
+        import tempfile
+        from desktop_intelligence.demo_data import seed_demo_data
+        demo_dir = Path(tempfile.mkdtemp(prefix="DesktopIntelligence_Demo_"))
+        paths = resolve_paths(data_dir_override=str(demo_dir / "data"), log_dir_override=str(demo_dir / "logs"))
+        paths.ensure_directories()
+        store = CsvStore(paths)
+        seed_demo_data(store)
+        app = DesktopIntelligenceApp(paths=paths, store=store)
+        app.is_demo_mode = True
+    else:
+        app = DesktopIntelligenceApp(config_path=args.config)
 
     if args.diagnostics:
         app.print_diagnostics()
@@ -434,7 +458,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if qt_app is None:
             qt_app = QApplication(sys.argv)
 
-        window = MainWindow(config=app.config, paths=app.paths, store=app.store, health_provider=app.get_health_status)
+        window = MainWindow(
+            config=app.config,
+            paths=app.paths,
+            store=app.store,
+            health_provider=app.get_health_status,
+            is_demo_mode=app.is_demo_mode,
+        )
 
         # Wire GUI consent prompt
         from desktop_intelligence.ui.dialogs.consent_prompt import show_launch_consent_dialog

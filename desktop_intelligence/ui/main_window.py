@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -133,6 +134,7 @@ class MainWindow(QMainWindow):
         paths: ResolvedPaths,
         store: CsvStore,
         health_provider: Optional[object] = None,
+        is_demo_mode: bool = False,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
@@ -140,12 +142,13 @@ class MainWindow(QMainWindow):
         self.paths = paths
         self.store = store
         self.health_provider = health_provider
+        self.is_demo_mode = is_demo_mode
 
         self._last_sessions_df: pd.DataFrame = pd.DataFrame()
         self._last_recs: list = []
         self._last_freshness: str = "Up to date"
 
-        self.setWindowTitle("Desktop Intelligence")
+        self.setWindowTitle("Desktop Intelligence [DEMO MODE]" if self.is_demo_mode else "Desktop Intelligence")
         self.setMinimumSize(980, 660)
         self.resize(1120, 740)
 
@@ -221,9 +224,34 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(sidebar_widget)
 
-        # Right Stacked Pages
+        # Right Stacked Pages and Demo Banner container
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        if self.is_demo_mode:
+            self.demo_banner = QFrame()
+            self.demo_banner.setObjectName("demo_banner")
+            self.demo_banner.setStyleSheet(
+                "QFrame#demo_banner { background: rgba(245, 158, 11, 0.15); "
+                "border-bottom: 1px solid rgba(245, 158, 11, 0.4); padding: 6px 16px; }"
+            )
+            banner_box = QHBoxLayout(self.demo_banner)
+            banner_box.setContentsMargins(12, 6, 12, 6)
+            banner_box.setSpacing(8)
+            banner_icon = QLabel("⚡")
+            banner_icon.setStyleSheet("font-size: 13px;")
+            banner_text = QLabel("DEMO MODE — Operating on isolated simulation data. Real system settings and files are protected.")
+            banner_text.setStyleSheet("color: #FBBF24; font-weight: 600; font-size: 12px;")
+            banner_box.addWidget(banner_icon)
+            banner_box.addWidget(banner_text)
+            banner_box.addStretch()
+            right_layout.addWidget(self.demo_banner)
+
         self.stack = QStackedWidget()
-        main_layout.addWidget(self.stack, stretch=1)
+        right_layout.addWidget(self.stack, stretch=1)
+        main_layout.addWidget(right_container, stretch=1)
 
         # Instantiate pages
         self.page_overview = OverviewPage(
@@ -534,6 +562,9 @@ class MainWindow(QMainWindow):
 
     def _persist_config(self) -> None:
         """Serialize configuration changes back to config.toml safely and atomically."""
+        if self.is_demo_mode:
+            # Protected in demo mode: do not write to user's real configuration
+            return
         try:
             save_config(self.config, self.paths.config_file)
         except Exception as exc:
