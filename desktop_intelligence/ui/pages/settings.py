@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -114,6 +115,16 @@ class SettingsPage(QWidget):
         self.spin_mem_thresh.setSuffix("%")
         form.addRow("High Memory Alert Threshold:", self.spin_mem_thresh)
 
+        # Windows Sign-in Startup Toggle
+        from desktop_intelligence.platform.windows_startup import is_run_at_startup_enabled
+        self.check_startup = QCheckBox("Start Desktop Intelligence automatically on Windows sign-in")
+        self.check_startup.setStyleSheet("font-size: 13px; font-weight: 500;")
+        try:
+            self.check_startup.setChecked(is_run_at_startup_enabled())
+        except Exception:
+            self.check_startup.setChecked(False)
+        form.addRow("Windows Startup:", self.check_startup)
+
         pref_box.addLayout(form)
 
         # Save Button & Status
@@ -163,6 +174,12 @@ class SettingsPage(QWidget):
         self.config.patterns.minimum_observation_days = self.spin_obs_days.value()
         self.config.patterns.launch_frequency_threshold = round(self.spin_threshold.value(), 2)
         self.config.resources.high_memory_percent = round(self.spin_mem_thresh.value(), 1)
+
+        try:
+            from desktop_intelligence.platform.windows_startup import set_run_at_startup
+            set_run_at_startup(self.check_startup.isChecked())
+        except Exception:
+            pass
 
         if self.on_save_config:
             self.on_save_config(self.config)

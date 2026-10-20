@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         store: CsvStore,
         health_provider: Optional[object] = None,
         is_demo_mode: bool = False,
+        is_attached: bool = False,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
@@ -143,12 +144,18 @@ class MainWindow(QMainWindow):
         self.store = store
         self.health_provider = health_provider
         self.is_demo_mode = is_demo_mode
+        self.is_attached = is_attached
 
         self._last_sessions_df: pd.DataFrame = pd.DataFrame()
         self._last_recs: list = []
         self._last_freshness: str = "Up to date"
 
-        self.setWindowTitle("Desktop Intelligence [DEMO MODE]" if self.is_demo_mode else "Desktop Intelligence")
+        title_parts = ["Desktop Intelligence"]
+        if self.is_demo_mode:
+            title_parts.append("[DEMO MODE]")
+        if self.is_attached:
+            title_parts.append("[Attached]")
+        self.setWindowTitle(" ".join(title_parts))
         self.setMinimumSize(980, 660)
         self.resize(1120, 740)
 
@@ -390,6 +397,18 @@ class MainWindow(QMainWindow):
 
     def update_collector_health(self) -> str:
         """Update sidebar status indicators from real collector health and return collection status."""
+        if getattr(self, "is_attached", False):
+            from desktop_intelligence.daemon import read_daemon_status
+            d_info = read_daemon_status(self.paths)
+            d_pid = d_info.get("pid", "active") if d_info else "active"
+            self.status_hook.setText(f"● Daemon: PID {d_pid}")
+            self.status_hook.setStyleSheet("color: #38BDF8; font-size: 11px;")
+            self.status_hook.setToolTip(f"Attached to background collector daemon (PID {d_pid})")
+            self.status_process.setText("● Mode: Attached")
+            self.status_process.setStyleSheet("color: #38BDF8; font-size: 11px;")
+            self.status_process.setToolTip("UI is attached to existing background collector daemon")
+            return "Attached to Background Daemon"
+
         collection_status = "Operational (Active)"
         if self.health_provider:
             try:

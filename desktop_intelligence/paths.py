@@ -46,6 +46,10 @@ class ResolvedPaths:
     def automation_log_csv(self) -> Path:
         return self.data_dir / "automation_log.csv"
 
+    @property
+    def daemon_status_file(self) -> Path:
+        return self.data_dir / "daemon_status.json"
+
     def ensure_directories(self) -> None:
         """Create data and log directories if they don't exist."""
         self.data_dir.mkdir(parents=True, exist_ok=True)

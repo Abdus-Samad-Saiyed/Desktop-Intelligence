@@ -373,6 +373,9 @@ class SingleInstanceGuard:
             self.handle = ctypes.windll.kernel32.CreateMutexW(None, True, self.mutex_name)
             last_err = ctypes.windll.kernel32.GetLastError()
             if last_err == ERROR_ALREADY_EXISTS:
+                if self.handle:
+                    ctypes.windll.kernel32.CloseHandle(self.handle)
+                    self.handle = None
                 self.is_primary = False
                 return False
             self.is_primary = True
@@ -395,9 +398,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--rescan-inventory", action="store_true", help="Perform application inventory discovery scan")
     parser.add_argument("--collector-only", "--headless", action="store_true", help="Run background collector without GUI")
     parser.add_argument("--demo-mode", action="store_true", help="Launch in isolated demo mode with deterministic simulated data")
+    parser.add_argument("--consent-prompt", action="store_true", help="Display standalone consent dialog for automation rule")
+    parser.add_argument("--rule-id", type=str, default="", help="Automation rule ID for consent prompt")
+    parser.add_argument("--app-name", type=str, default="", help="Application name for consent prompt")
+    parser.add_argument("--exe-path", type=str, default="", help="Executable path for consent prompt")
+    parser.add_argument("--day", type=str, default="", help="Day of week for consent prompt")
+    parser.add_argument("--time", type=str, default="", help="Time bucket for consent prompt")
+    parser.add_argument("--timeout", type=int, default=10, help="Consent prompt timeout in seconds")
     parser.add_argument("--config", type=Path, default=None, help="Custom path to config.toml")
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+
+    if args.consent_prompt:
+        from PySide6.QtWidgets import QApplication
+        from desktop_intelligence.automation.rules import AutomationRule
+        from desktop_intelligence.ui.dialogs.consent_prompt import show_launch_consent_dialog
+
+        qt_app = QApplication.instance()
+        if qt_app is None:
+            qt_app = QApplication(sys.argv)
+
+        rule = AutomationRule(
+            rule_id=args.rule_id or "cli_prompt",
+            app_name=args.app_name or "Application",
+            exe_path=args.exe_path or "",
+            day_of_week=args.day or "",
+            time_bucket=args.time or "",
+            frequency_percent=100.0,
+            approved=True,
+        )
+        choice = show_launch_consent_dialog(rule, timeout_seconds=args.timeout or 10)
+        print(choice)
+        return 0 if choice == "approve" else 1
 
     if args.demo_mode:
         import tempfile
@@ -421,34 +453,76 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Successfully scanned {len(items)} installed applications.")
         return 0
 
-    guard = SingleInstanceGuard()
-    if not guard.acquire():
-        logger.warning("Another instance of Desktop Intelligence is already running. Exiting.")
-        print("Desktop Intelligence is already running.", file=sys.stderr)
-        return 0
+    from desktop_intelligence.daemon import (
+        COLLECTOR_MUTEX_NAME,
+        UI_MUTEX_NAME,
+        write_daemon_status,
+        remove_daemon_status,
+        update_heartbeat,
+    )
 
-    try:
-        # Start background collector services
-        app.start_background_services()
+    if args.collector_only:
+        collector_guard = SingleInstanceGuard(COLLECTOR_MUTEX_NAME)
+        if not collector_guard.acquire():
+            logger.warning("Another background collector instance is already running. Exiting.")
+            print("Desktop Intelligence collector is already running.", file=sys.stderr)
+            return 0
 
-        # Graceful shutdown handler
-        def handle_sig(sig, frame):
-            logger.info("Received termination signal %s. Shutting down...", sig)
-            app.stop_background_services()
-            guard.release()
-            sys.exit(0)
+        try:
+            write_daemon_status(app.paths, os.getpid(), "running")
+            app.start_background_services()
 
-        signal.signal(signal.SIGINT, handle_sig)
-        signal.signal(signal.SIGTERM, handle_sig)
+            def handle_sig(sig, frame):
+                logger.info("Received termination signal %s. Shutting down...", sig)
+                app.stop_background_services()
+                remove_daemon_status(app.paths)
+                collector_guard.release()
+                sys.exit(0)
 
-        if args.collector_only:
+            signal.signal(signal.SIGINT, handle_sig)
+            signal.signal(signal.SIGTERM, handle_sig)
+
             print("Desktop Intelligence collector running in background. Press Ctrl+C to terminate.")
             try:
                 while True:
                     time.sleep(1.0)
+                    update_heartbeat(app.paths)
             except KeyboardInterrupt:
                 app.stop_background_services()
             return 0
+        finally:
+            remove_daemon_status(app.paths)
+            collector_guard.release()
+
+    # GUI Mode: Acquire UI mutex
+    ui_guard = SingleInstanceGuard(UI_MUTEX_NAME)
+    if not ui_guard.acquire():
+        logger.warning("Another instance of Desktop Intelligence UI is already running. Exiting.")
+        print("Desktop Intelligence UI is already running.", file=sys.stderr)
+        return 0
+
+    # Probe collector mutex: if held, attach to existing daemon; otherwise host the collector services
+    collector_guard = SingleInstanceGuard(COLLECTOR_MUTEX_NAME)
+    is_attached = not collector_guard.acquire()
+
+    try:
+        if is_attached:
+            logger.info("Collector daemon running. Attaching UI to existing background services.")
+        else:
+            write_daemon_status(app.paths, os.getpid(), "running")
+            app.start_background_services()
+
+        def handle_sig_gui(sig, frame):
+            logger.info("Received termination signal %s. Shutting down UI...", sig)
+            if not is_attached:
+                app.stop_background_services()
+                remove_daemon_status(app.paths)
+                collector_guard.release()
+            ui_guard.release()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, handle_sig_gui)
+        signal.signal(signal.SIGTERM, handle_sig_gui)
 
         # Launch PySide6 GUI Dashboard
         from PySide6.QtWidgets import QApplication
@@ -464,22 +538,29 @@ def main(argv: Optional[List[str]] = None) -> int:
             store=app.store,
             health_provider=app.get_health_status,
             is_demo_mode=app.is_demo_mode,
+            is_attached=is_attached,
         )
 
-        # Wire thread-safe GUI consent broker
-        from desktop_intelligence.ui.consent_broker import ConsentBroker
-        consent_broker = ConsentBroker(parent_window=window)
-        app.scheduler.consent_provider = consent_broker.request_consent
-        window._consent_broker = consent_broker
+        if not is_attached:
+            # Wire thread-safe GUI consent broker
+            from desktop_intelligence.ui.consent_broker import ConsentBroker
+            consent_broker = ConsentBroker(parent_window=window)
+            app.scheduler.consent_provider = consent_broker.request_consent
+            window._consent_broker = consent_broker
 
         if not app.config.ui.start_minimized:
             window.show()
 
         ret = qt_app.exec()
-        app.stop_background_services()
+        if not is_attached:
+            app.stop_background_services()
+            remove_daemon_status(app.paths)
         return ret
     finally:
-        guard.release()
+        if not is_attached:
+            remove_daemon_status(app.paths)
+            collector_guard.release()
+        ui_guard.release()
 
 
 if __name__ == "__main__":

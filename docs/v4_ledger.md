@@ -73,7 +73,7 @@ Status as of Phase 0 baseline audit (2026-10-20).
 
 | Item | Requirement | Status | Evidence (File & Line) | Proving Test |
 |---|---|---|---|---|
-| 13.1 | Dual mutexes (`Local\DesktopIntelligence_Collector` & `UI`) | PARTIAL | `desktop_intelligence/app.py:348` (single mutex `Local\DesktopIntelligence_SingleInstance_Mutex`) | Phase 8: `test_dual_mutex_collector_and_ui` |
-| 13.2 | GUI attach to running daemon via `daemon_status.json` | TODO | `desktop_intelligence/app.py` | Phase 8: `test_ui_attaches_to_running_daemon` |
-| 13.3 | Sign-in startup toggle via HKCU Run key and `pythonw.exe` | TODO | `desktop_intelligence/ui/pages/settings.py` | Phase 8: `test_startup_run_key_toggle` |
-| 13.4 | Headless consent prompt helper process (`--consent-prompt`) | TODO | `desktop_intelligence/app.py` | Phase 8: `test_headless_consent_prompt_helper` |
+| 13.1 | Dual mutexes (`Local\DesktopIntelligence_Collector` & `UI`) | DONE | `desktop_intelligence/daemon.py:17-18`, `desktop_intelligence/app.py:465-495` | `tests/unit/test_v4_daemon_and_startup.py:test_dual_mutex_collector_and_ui` |
+| 13.2 | GUI attach to running daemon via `daemon_status.json` | DONE | `desktop_intelligence/daemon.py:21-95`, `desktop_intelligence/ui/main_window.py:135-155,400-415` | `tests/unit/test_v4_daemon_and_startup.py:test_ui_attaches_to_running_daemon` |
+| 13.3 | Sign-in startup toggle via HKCU Run key and `pythonw.exe` | DONE | `desktop_intelligence/platform/windows_startup.py:14-75`, `desktop_intelligence/ui/pages/settings.py:118-130,175-185` | `tests/unit/test_v4_daemon_and_startup.py:test_startup_run_key_toggle` |
+| 13.4 | Headless consent prompt helper process (`--consent-prompt`) | DONE | `desktop_intelligence/app.py:408-430` (`--consent-prompt` CLI entry point) | `tests/unit/test_v4_daemon_and_startup.py:test_headless_consent_prompt_helper` |
