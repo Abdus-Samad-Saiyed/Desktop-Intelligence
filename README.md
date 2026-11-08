@@ -159,4 +159,4 @@ These are possible next steps, not promises or features already implemented:
 
 ## License
 
-No license file is currently included. Until a license is chosen and added, reuse and redistribution are not granted by this repository. If you want to allow broad reuse with minimal conditions, MIT is a common permissive option; it requires preserving the copyright and license notice and provides the software without warranty. Choose a license before adding one.
+This project is licensed under the MIT License. See [LICENSE](LICENSE). It permits use, copying, modification, distribution, sublicensing, and sale, provided the copyright and license notice are included with copies or substantial portions. The software is provided without warranty.
