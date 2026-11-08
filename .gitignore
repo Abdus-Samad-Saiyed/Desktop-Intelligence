@@ -1,25 +1,53 @@
-# Virtual environments
-myenv/
+# Python environments, bytecode, and caches
 .venv/
-env/
 venv/
-
-# Python bytecode and caches
+env/
+myenv/
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 
-# Desktop Intelligence runtime data and logs
+# Local secrets and per-machine configuration (keep config.toml as the template)
+.env
+.env.*
+!.env.example
+config.local.toml
+config.user.toml
+
+# Runtime data and logs
 data/
 logs/
-*.csv
+*.log
+activity_events.csv
+activity_sessions.csv
+resource_samples.csv
+application_inventory.csv
+recommendations.csv
+automation_log.csv
+daemon_status.json
+*.sqlite
+*.sqlite3
+*.db
 
-# Build / packaging artifacts
+# Generated project exports
+project_dump.txt
+readme.zip
+
+# Build and test output
 build/
 dist/
 *.egg-info/
-
-# Testing and coverage
 .coverage
 htmlcov/
+
+# IDE and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+screenshots/generated/
+.pytest-tmp/

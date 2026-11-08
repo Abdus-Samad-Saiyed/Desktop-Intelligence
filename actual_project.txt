@@ -1,8 +1,0 @@
-Read data from a csv file about readings in a lab experiment
-Clean the data
-Adjust units
-Make necessary calculations
-Plot the curve using matplotlib for visualization
-
-
-Alternative: Library Capacity Prediction
